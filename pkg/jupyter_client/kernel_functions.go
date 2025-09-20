@@ -91,3 +91,38 @@ func (c *Client) GetKernels(ctx context.Context) (*[]Kernel, error) {
 
 	return &runningKernels, nil
 }
+
+func (c *Client) GetKernelInfo(ctx context.Context, kernelID string) (*Kernel, error) {
+	if kernelID == "" {
+		return nil, fmt.Errorf("kernel ID cannot be empty")
+	}
+
+	urlPath := fmt.Sprintf("%s/api/kernels/%s", c.baseURL, kernelID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlPath, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("token %s", c.token))
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var errResp ErrorResponse
+		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
+			return nil, fmt.Errorf("API returned non-200 status: %d, unable to parse error body: %w", resp.StatusCode, err)
+		}
+		return nil, fmt.Errorf("API returned non-200 status: %d, reason: %s", resp.StatusCode, errResp.Reason)
+	}
+
+	var kernelInfo Kernel
+	if err := json.NewDecoder(resp.Body).Decode(&kernelInfo); err != nil {
+		return nil, fmt.Errorf("failed to decode kernel info response: %w", err)
+	}
+
+	return &kernelInfo, nil
+}
