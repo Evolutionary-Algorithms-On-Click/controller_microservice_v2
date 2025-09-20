@@ -27,14 +27,22 @@ func main() {
 	}
 
 	// starting a kernel to see if it works
-	_, err = client.StartKernel(context.Background(), "python3")
+	kernel2, err := client.StartKernel(context.Background(), "python3")
 	if err != nil {
 		pkg.Logger.Error().Msg(err.Error())
 	}
-	_, err = client.StartKernel(context.Background(), "python3")
+	kernel1, err := client.StartKernel(context.Background(), "python3")
 	if err != nil {
 		pkg.Logger.Error().Msg(err.Error())
 	}
+	_, err = client.GetKernels(context.Background())
+	if err != nil {
+		pkg.Logger.Error().Msg(err.Error())
+	}
+	_, _ = client.GetKernelInfo(context.Background(), kernel1.ID)
+	_, _ = client.RestartKernel(context.Background(), kernel1.ID)
+	_ = client.DeleteKernel(context.Background(), kernel2.ID)
+	_ = client.DeleteKernel(context.Background(), kernel1.ID)
 	_, err = client.GetKernels(context.Background())
 	if err != nil {
 		pkg.Logger.Error().Msg(err.Error())
