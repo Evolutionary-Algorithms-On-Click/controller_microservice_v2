@@ -3,7 +3,7 @@ pre-commit:
   commands:
     # Run go fmt on all Go files in the module to ensure consistent formatting.
     go-fmt:
-      run: go fmt ./...
+      run: go fmt ./... && git add {staged_files}
 
     # Run go vet on all Go files in the module to check for common errors.
     go-vet:
