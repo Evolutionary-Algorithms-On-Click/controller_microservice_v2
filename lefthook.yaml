@@ -5,16 +5,12 @@ pre-commit:
     # 1. Block fmt.Println and fmt.Printf usage to enforce structured logging
     prevent-fmt-println:
       glob: "*.go"
-      run: ./scripts/prevent-fmt-println.sh {staged_files}
+      run: ./scripts/prevent_fmt.sh {staged_files}
 
     # 2. Automatically format code with gofmt and re-add the changes to the commit
     go-fmt:
       glob: "*.go"
-      run: |
-        if [ -n "$(gofmt -l {staged_files})" ]; then
-          gofmt -w {staged_files}
-          git add {staged_files}
-        fi
+      run: ./scripts/go_fmt.sh
 
     # 3. Run all tests in the project
     go-test:
@@ -23,4 +19,4 @@ pre-commit:
     # 4. Run a comprehensive linter to check for common errors and style issues
     go-lint:
       glob: "*.go"
-      run: golangci-lint run --out-format=colored-line-number --fix {staged_files}
+      run: golangci-lint run --out-format=colored-line-number --fix ./...

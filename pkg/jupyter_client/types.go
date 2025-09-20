@@ -14,25 +14,24 @@ type GetKernelSpecsResponse struct {
 }
 
 type KernelSpecEntry struct {
-	Name      string    `json:"name"`
-	Spec      KernelSpecFile `json:"spec"`
+	Name      string            `json:"name"`
+	Spec      KernelSpecFile    `json:"spec"`
 	Resources map[string]string `json:"resources"`
 }
 
 type KernelSpecFile struct {
-	Language        string                 `json:"language"`
-	Argv            []string               `json:"argv"`
-	DisplayName     string                 `json:"display_name"`
-	CodemirrorMode  interface{}            `json:"codemirror_mode,omitempty"`
-	Env             map[string]string      `json:"env,omitempty"`
-	HelpLinks       []HelpLink             `json:"help_links,omitempty"`
+	Language       string            `json:"language"`
+	Argv           []string          `json:"argv"`
+	DisplayName    string            `json:"display_name"`
+	CodemirrorMode interface{}       `json:"codemirror_mode,omitempty"`
+	Env            map[string]string `json:"env,omitempty"`
+	HelpLinks      []HelpLink        `json:"help_links,omitempty"`
 }
 
 type HelpLink struct {
 	Text string `json:"text"`
 	URL  string `json:"url"`
 }
-
 
 type StartKernelRequest struct {
 	Name string `json:"name"`
