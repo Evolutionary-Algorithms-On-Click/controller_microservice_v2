@@ -1,17 +1,14 @@
 # This hook runs before a git commit
 pre-commit:
   commands:
-    # Run go fmt on all staged Go files to ensure consistent formatting
+    # Run go fmt on all Go files in the module to ensure consistent formatting.
     go-fmt:
-      glob: "*.go"
-      run: go fmt {staged_files}
+      run: go fmt ./...
 
-    # Run go vet on all Go files to check for common errors
+    # Run go vet on all Go files in the module to check for common errors.
     go-vet:
-      glob: "*.go"
       run: go vet ./...
 
-    # Run go test on all Go files to ensure all tests pass
+    # Run go test on all Go files in the module.
     go-test:
-      glob: "*.go"
       run: go test ./...
