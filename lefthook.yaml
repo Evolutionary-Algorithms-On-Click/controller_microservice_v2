@@ -1,15 +1,26 @@
 # This hook runs before a git commit
 pre-commit:
+  parallel: true
   commands:
-    # Run go fmt on all Go files in the module to ensure consistent formatting.
+    # 1. Block fmt.Println and fmt.Printf usage to enforce structured logging
+    prevent-fmt-println:
+      glob: "*.go"
+      run: ./scripts/prevent-fmt-println.sh {staged_files}
+
+    # 2. Automatically format code with gofmt and re-add the changes to the commit
     go-fmt:
       glob: "*.go"
-      run: go fmt {staged_files} && git add {staged_files}
+      run: |
+        if [ -n "$(gofmt -l {staged_files})" ]; then
+          gofmt -w {staged_files}
+          git add {staged_files}
+        fi
 
-    # Run go vet on all Go files in the module to check for common errors.
-    go-vet:
-      run: go vet ./...
-
-    # Run go test on all Go files in the module.
+    # 3. Run all tests in the project
     go-test:
       run: go test ./...
+
+    # 4. Run a comprehensive linter to check for common errors and style issues
+    go-lint:
+      glob: "*.go"
+      run: golangci-lint run --out-format=colored-line-number --fix {staged_files}
