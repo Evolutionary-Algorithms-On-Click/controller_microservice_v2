@@ -1,6 +1,6 @@
 .PHONY: build test fmt run docker-up clean setup install-tools
 
-BINARY_NAME=go-service
+BINARY_NAME=build/go-service
 TOOLS=golang.org/x/tools/cmd/goimports golang.org/x/lint/golint github.com/evilmartians/lefthook
 
 build:

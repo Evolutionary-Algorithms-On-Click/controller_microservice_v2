@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg"
+	jupyterclient "github.com/Thanus-Kumaar/controller_microservice_v2/pkg/jupyter_client"
 )
 
 func main() {
@@ -16,4 +17,12 @@ func main() {
 		return
 	}
 	logger.Info().Msg("[MSG]: Application starting...")
+
+	// since under development, the url and token is hardcoded
+	_, err = jupyterclient.NewClient("http://localhost:8888", "HelloThereHowAreyou!")
+	if(err!=nil) {
+		logger.Error().Msg(err.Error())
+		// should i return here? or just run the server until service is discovered?		
+	}
+	
 }

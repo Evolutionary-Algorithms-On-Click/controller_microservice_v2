@@ -2,10 +2,10 @@ package pkg
 
 import (
 	"fmt"
+	"github.com/rs/zerolog"
 	"io"
 	"os"
 	"time"
-	"github.com/rs/zerolog"
 )
 
 var Logger *zerolog.Logger
