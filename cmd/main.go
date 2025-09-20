@@ -31,4 +31,12 @@ func main() {
 	if err != nil {
 		pkg.Logger.Error().Msg(err.Error())
 	}
+	_, err = client.StartKernel(context.Background(), "python3")
+	if err != nil {
+		pkg.Logger.Error().Msg(err.Error())
+	}
+	_, err = client.GetKernels(context.Background())
+	if err != nil {
+		pkg.Logger.Error().Msg(err.Error())
+	}
 }
