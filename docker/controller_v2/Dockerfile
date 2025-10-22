@@ -5,7 +5,7 @@ FROM golang:1.24-alpine
 RUN apk add --no-cache git
 
 # Create and switch to the app directory
-WORKDIR /kernel_manager
+WORKDIR /app
 
 # Copy go.mod and go.sum first (this helps cache dependencies)
 COPY go.mod go.sum ./
