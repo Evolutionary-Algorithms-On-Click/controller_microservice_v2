@@ -1,0 +1,88 @@
+services:
+  # 1. Go Controller Microservice (The Brain)
+  controller_v2:
+    build:
+      context: .
+      dockerfile: Dockerfile.controller
+    ports:
+      # Exposes your Go API to the host machine (e.g., for Postman/Frontend)
+      - "8080:8080"
+    volumes:
+      # Mounts your local Go code for live development
+      - .:/app
+    environment:
+      # CRITICAL: Database connection string using the service name 'cockroachdb'
+      DATABASE_URL: "postgresql://root@cockroachdb:26257/evocdb?sslmode=disable"
+      APP_ENV: "DEVELOPMENT"
+      # The Go service will use the service name 'jupyter_gateway' to talk to the kernel server
+      JUPYTER_GATEWAY_URL: "http://jupyter_gateway:8888"
+      JUPYTER_AUTH_TOKEN: "YOUR_SECRET_TOKEN"
+    networks:
+      - evoc-net
+    depends_on:
+      - jupyter_gateway
+      - cockroachdb
+      - minio
+
+  # 2. Jupyter Kernel Gateway (The Manager)
+  jupyter_gateway:
+    # Uses the official Jupyter image as the base server
+    build: 
+      context: .
+      dockerfile: Dockerfile.gateway
+    environment:
+      KG_AUTH_TOKEN: 'YOUR_SECRET_TOKEN' # Security token for client (Go service) communication
+      KG_ALLOW_ORIGIN: '*'               # Allows CORS from frontend
+      KG_IP: '0.0.0.0'
+    ports:
+      # Exposes the Gateway's port to the host (e.g., for direct testing)
+      - "8888:8888"
+    networks:
+      - evoc-net
+    # CRITICAL: This links the Gateway to the custom image where the kernel runs
+    # The Gateway will launch the kernel process inside an instance of python_runner
+    depends_on:
+      - python_runner 
+
+  # 3. Python Runner (The Worker Environment)
+  python_runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.pyenv
+    networks:
+      - evoc-net
+    # This service is an execution environment; it doesn't need exposed ports.
+
+  # 4. CockroachDB (The Distributed Database)
+  cockroachdb:
+    image: cockroachdb/cockroach:v22.2.0
+    command: start-single-node --insecure --host=cockroachdb
+    ports:
+      - "26257:26257" # SQL access port
+      - "8081:8081" # CockroachDB UI port (to avoid conflict with Go service 8080)
+    volumes:
+      - cockroach-data:/cockroach/cockroach-data
+    networks:
+      - evoc-net
+
+  # 5. MinIO (The Object Storage)
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"  # S3 API port (used by Go service)
+      - "9001:9001"  # Console UI port
+    environment:
+      MINIO_ROOT_USER: minio_user
+      MINIO_ROOT_PASSWORD: minio_password
+    networks:
+      - evoc-net
+
+# Define a single shared network for all services
+networks:
+  evoc-net:
+    driver: bridge
+
+# Define persistent storage volumes
+volumes:
+  cockroach-data:

@@ -50,11 +50,13 @@ func main() {
 	}
 
 	// since under development, the url and token is hardcoded
-	_, err = jupyterclient.NewClient("http://localhost:8888", "HelloThereHowAreyou!")
+	client, err := jupyterclient.NewClient("http://localhost:8888", "HelloThereHowAreyou!")
 	if err != nil {
 		pkg.Logger.Error().Msg(err.Error())
 		// should i return here? or just run the server until service is discovered?
 	}
-
-	
+	_, err = client.StartKernel(context.Background(), "python3")
+	if err != nil {
+		pkg.Logger.Error().Msg(err.Error())
+	}
 }
