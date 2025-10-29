@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -37,118 +38,152 @@ func writeJSONResponse(w http.ResponseWriter, statusCode int, data any) {
 	}
 }
 
-// KernelFunctionsHandler routes all /api/kernels and /api/kernels/{id} requests.
+// KernelFunctionsHandler acts as a single entry point for all /api/kernels routes.
+// Handles:
+//   - GET /api/kernels                     → List all kernels
+//   - POST /api/kernels                    → Start new kernel
+//   - GET /api/kernels/{id}                → Get kernel info
+//   - DELETE /api/kernels/{id}             → Delete kernel
+//   - POST /api/kernels/{id}/interrupt     → Interrupt kernel
+//   - POST /api/kernels/{id}/restart       → Restart kernel
 func (c *KernelController) KernelFunctionsHandler(w http.ResponseWriter, r *http.Request) {
-	// 1. Determine if the request is for a specific kernel ID
-	pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	
-	// Example path: /api/kernels/12345678-abcd-1234-abcd-1234567890ab
-	// If pathParts length is 4, the 4th element is the ID
-	kernelID := ""
-	if len(pathParts) >= 4 && pathParts[len(pathParts)-2] == "kernels" {
-		kernelID = pathParts[len(pathParts)-1]
+	path := strings.Trim(r.URL.Path, "/")
+	pathParts := strings.Split(path, "/")
+
+	// Expected structures:
+	// [api, kernels]
+	// [api, kernels, {id}]
+	// [api, kernels, {id}, interrupt|restart]
+	if len(pathParts) < 2 || pathParts[0] != "api" || pathParts[1] != "kernels" {
+		http.Error(w, "Invalid route", http.StatusNotFound)
+		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	// --- Route by Kernel ID presence and HTTP Method ---
-
-	if kernelID != "" {
-		// Case: /api/kernels/{kernel_id} or /api/kernels/{kernel_id}/action
-		c.handleSingleKernel(w, r, ctx, kernelID)
-	} else {
-		// Case: /api/kernels (List all running kernels)
+	switch len(pathParts) {
+	case 2:
+		// /api/kernels
 		c.handleKernelList(w, r, ctx)
-	}
-}
-
-// handleSingleKernel handles GET, DELETE, and POST for specific kernel actions.
-func (c *KernelController) handleSingleKernel(w http.ResponseWriter, r *http.Request, ctx context.Context, kernelID string) {
-	// Check for specific actions like /interrupt or /restart
-	path := strings.Trim(r.URL.Path, "/")
-	
-	if strings.HasSuffix(path, "/interrupt") && r.Method == http.MethodPost {
-		c.handleInterrupt(w, r, ctx, kernelID)
 		return
-	}
-	if strings.HasSuffix(path, "/restart") && r.Method == http.MethodPost {
-		c.handleRestart(w, r, ctx, kernelID)
-		return
-	}
 
-	// Handle standard ID actions (GET / DELETE)
-	switch r.Method {
-	case http.MethodGet:
-		c.handleGetKernelInfo(w, r, ctx, kernelID)
-	case http.MethodDelete:
-		c.handleDeleteKernel(w, r, ctx, kernelID)
+	case 3:
+		// /api/kernels/{id}
+		kernelID := pathParts[2]
+		c.handleSingleKernel(w, r, ctx, kernelID)
+		return
+
+	case 4:
+		// /api/kernels/{id}/{action}
+		kernelID := pathParts[2]
+		action := pathParts[3]
+		c.handleKernelAction(w, r, ctx, kernelID, action)
+		return
+
 	default:
-		http.Error(w, "Method not allowed for single kernel resource", http.StatusMethodNotAllowed)
-		c.Logger.Error().Msg("Method not allowed for single kernel resource")
+		http.Error(w, "Invalid kernel path", http.StatusNotFound)
+		return
 	}
 }
 
-// handleKernelList handles the GET /api/kernels endpoint.
+// handleKernelList handles both GET (list) and POST (start) requests to /api/kernels.
 func (c *KernelController) handleKernelList(w http.ResponseWriter, r *http.Request, ctx context.Context) {
-	if r.Method != http.MethodGet {
+	switch r.Method {
+
+	case http.MethodGet:
+		// --- List all running kernels ---
+		kernels, err := c.JupyterClient.GetKernels(ctx)
+		if err != nil {
+			c.Logger.Error().Err(err).Msg("Failed to retrieve running kernels list")
+			http.Error(w, "Error retrieving kernel list", http.StatusInternalServerError)
+			return
+		}
+		writeJSONResponse(w, http.StatusOK, kernels)
+		return
+
+	case http.MethodPost:
+		// --- Start a new kernel ---
+		var reqBody struct {
+			Language string `json:"language"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+			http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+			return
+		}
+		if reqBody.Language == "" {
+			http.Error(w, "Missing 'language' field", http.StatusBadRequest)
+			return
+		}
+
+		kernel, err := c.JupyterClient.StartKernel(ctx, reqBody.Language)
+		if err != nil {
+			c.Logger.Error().Err(err).Str("language", reqBody.Language).Msg("Failed to start kernel")
+			http.Error(w, fmt.Sprintf("Error starting kernel: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		writeJSONResponse(w, http.StatusCreated, kernel)
+		return
+
+	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	kernels, err := c.JupyterClient.GetKernels(ctx)
-	if err != nil {
-		c.Logger.Error().Err(err).Msg("Failed to retrieve running kernels list")
-		http.Error(w, "Error retrieving kernel list", http.StatusInternalServerError)
-		return
-	}
-
-	writeJSONResponse(w, http.StatusOK, kernels)
 }
 
-// --- Specific Action Handlers ---
+// handleSingleKernel handles GET and DELETE for /api/kernels/{id}.
+func (c *KernelController) handleSingleKernel(w http.ResponseWriter, r *http.Request, ctx context.Context, kernelID string) {
+	switch r.Method {
+	case http.MethodGet:
+		info, err := c.JupyterClient.GetKernelInfo(ctx, kernelID)
+		if err != nil {
+			c.Logger.Error().Err(err).Str("kernel_id", kernelID).Msg("Failed to retrieve kernel info")
+			http.Error(w, "Kernel not found or service error", http.StatusNotFound)
+			return
+		}
+		writeJSONResponse(w, http.StatusOK, info)
 
-func (c *KernelController) handleGetKernelInfo(w http.ResponseWriter, r *http.Request, ctx context.Context, kernelID string) {
-	info, err := c.JupyterClient.GetKernelInfo(ctx, kernelID)
-	if err != nil {
-		c.Logger.Error().Err(err).Str("kernel_id", kernelID).Msg("Failed to retrieve kernel info")
-		http.Error(w, "Kernel not found or service error", http.StatusNotFound) // Use 404/500 based on expected error type
-		return
+	case http.MethodDelete:
+		err := c.JupyterClient.DeleteKernel(ctx, kernelID)
+		if err != nil {
+			c.Logger.Error().Err(err).Str("kernel_id", kernelID).Msg("Failed to delete kernel")
+			http.Error(w, "Error deleting kernel", http.StatusInternalServerError)
+			return
+		}
+		writeJSONResponse(w, http.StatusNoContent, nil)
+
+	default:
+		http.Error(w, "Method not allowed for single kernel resource", http.StatusMethodNotAllowed)
 	}
-
-	writeJSONResponse(w, http.StatusOK, info)
 }
 
-func (c *KernelController) handleDeleteKernel(w http.ResponseWriter, r *http.Request, ctx context.Context, kernelID string) {
-	err := c.JupyterClient.DeleteKernel(ctx, kernelID)
-	if err != nil {
-		c.Logger.Error().Err(err).Str("kernel_id", kernelID).Msg("Failed to delete kernel")
-		http.Error(w, "Error deleting kernel", http.StatusInternalServerError)
+// handleKernelAction routes POST /api/kernels/{id}/interrupt|restart requests.
+func (c *KernelController) handleKernelAction(w http.ResponseWriter, r *http.Request, ctx context.Context, kernelID, action string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed for kernel action", http.StatusMethodNotAllowed)
 		return
 	}
-	
-	// 204 No Content response for successful deletion
-	writeJSONResponse(w, http.StatusNoContent, nil)
-}
 
-func (c *KernelController) handleInterrupt(w http.ResponseWriter, r *http.Request, ctx context.Context, kernelID string) {
-	err := c.JupyterClient.InterruptKernel(ctx, kernelID)
-	if err != nil {
-		c.Logger.Error().Err(err).Str("kernel_id", kernelID).Msg("Failed to interrupt kernel")
-		http.Error(w, "Error interrupting kernel", http.StatusInternalServerError)
-		return
-	}
-	// 204 No Content response for successful interrupt
-	writeJSONResponse(w, http.StatusNoContent, nil)
-}
+	switch action {
+	case "interrupt":
+		if err := c.JupyterClient.InterruptKernel(ctx, kernelID); err != nil {
+			c.Logger.Error().Err(err).Str("kernel_id", kernelID).Msg("Failed to interrupt kernel")
+			http.Error(w, "Error interrupting kernel", http.StatusInternalServerError)
+			return
+		}
+		writeJSONResponse(w, http.StatusNoContent, nil)
 
-func (c *KernelController) handleRestart(w http.ResponseWriter, r *http.Request, ctx context.Context, kernelID string) {
-	info, err := c.JupyterClient.RestartKernel(ctx, kernelID)
-	if err != nil {
-		c.Logger.Error().Err(err).Str("kernel_id", kernelID).Msg("Failed to restart kernel")
-		http.Error(w, "Error restarting kernel", http.StatusInternalServerError)
-		return
+	case "restart":
+		info, err := c.JupyterClient.RestartKernel(ctx, kernelID)
+		if err != nil {
+			c.Logger.Error().Err(err).Str("kernel_id", kernelID).Msg("Failed to restart kernel")
+			http.Error(w, "Error restarting kernel", http.StatusInternalServerError)
+			return
+		}
+		writeJSONResponse(w, http.StatusOK, info)
+
+	default:
+		http.Error(w, "Unknown kernel action", http.StatusNotFound)
 	}
-	
-	writeJSONResponse(w, http.StatusOK, info)
 }

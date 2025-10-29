@@ -21,5 +21,5 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) {
 	// mux.HandleFunc("/api/problems/user", problemController.GetProblemsByUserIDHandler)
 
 	// handlers for other routes related to jupyter kernel gateway
-	mux.HandleFunc("/api/kernel", kernelController.KernelFunctionsHandler)
+	mux.HandleFunc("/api/kernels/", kernelController.KernelFunctionsHandler)
 }
