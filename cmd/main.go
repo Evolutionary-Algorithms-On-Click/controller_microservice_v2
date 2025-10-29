@@ -12,6 +12,7 @@ import (
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg"
 	jupyterclient "github.com/Thanus-Kumaar/controller_microservice_v2/pkg/jupyter_client"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/routes"
+	"github.com/joho/godotenv"
 	"github.com/rs/cors"
 	"github.com/rs/zerolog"
 )
@@ -39,6 +40,11 @@ func initDBWithRetry(ctx context.Context, logger zerolog.Logger) error {
 }
 
 func main() {
+	// Initializing the environment variables
+	if err := godotenv.Load(); err != nil {
+		log.Printf("[CRASH]: Could not load .env file: %v", err)
+	}
+
 	// Initialization of Logger
 	logger, err := pkg.NewLogger(os.Getenv("APP_ENV"))
 	if err != nil {
@@ -55,15 +61,16 @@ func main() {
 	}
 	defer db.Pool.Close()
 
-	_, err = jupyterclient.NewClient("http://localhost:8888", "YOUR_SECRET_TOKEN")
+	jupyterGateway, err := jupyterclient.NewClient("http://localhost:8888", "YOUR_SECRET_TOKEN")
 	if err != nil {
 		pkg.Logger.Fatal().Err(err).Msg("[CRASH]: Could not create Jupyter client/connection check failed")
 		return
 	}
+	pkg.Logger.Info().Msg("[MSG]: Connection with jupyter kernel gateway initialized successfully!")
 
 	// Initialization of HTTP Server
 	mux := http.NewServeMux()
-	routes.RegisterAPIRoutes(mux)
+	routes.RegisterAPIRoutes(mux, jupyterGateway)
 
 	corsHandler := cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"}, // Allows all origins for development
