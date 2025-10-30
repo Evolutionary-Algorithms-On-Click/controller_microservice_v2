@@ -29,7 +29,7 @@ func NewLogger(env string) (zerolog.Logger, error) {
 		}
 		output = file
 	default:
-		return zerolog.Logger{}, fmt.Errorf("invalid environment for logger setup: %s", env)
+		return zerolog.Logger{}, fmt.Errorf("invalid environment for logger setup: %s (Allowed: DEVELOPMENT, PRODUCTION)", env)
 	}
 
 	logger := zerolog.New(output).With().Timestamp().Logger()

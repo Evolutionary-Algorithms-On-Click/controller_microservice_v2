@@ -29,7 +29,7 @@ func initDBWithRetry(ctx context.Context, logger zerolog.Logger) error {
 	for i := range MaxDBRetries {
 		err := db.InitDB(ctx)
 		if err == nil {
-			logger.Info().Msg("Database connection pool successfully initialized.")
+			logger.Info().Msg("[DB]: Database connection pool successfully initialized.")
 			return nil
 		}
 
@@ -53,7 +53,7 @@ func main() {
 		return
 	}
 	pkg.Logger = &logger
-	pkg.Logger.Info().Msg("[MSG]: Logger initialization successful!")
+	pkg.Logger.Info().Msg("[LOGGER]: Logger initialization successful!")
 
 	// Initialization of Database with Retry Logic
 	ctx := context.Background()
@@ -62,6 +62,14 @@ func main() {
 	}
 	defer db.Pool.Close()
 
+	if os.Getenv("APP_ENV") == "DEVELOPMENT" {
+		if err := db.LoadSchema(ctx); err != nil {
+			pkg.Logger.Fatal().Err(err).Msg("[CRASH]: Failed to initialize database schema")
+		} else {
+			pkg.Logger.Info().Msg("[DB]: Database schema successfully initialized (development mode).")
+		}
+	}
+
 	jupyterGateway, err := jupyterclient.NewClient("http://localhost:8888", "YOUR_SECRET_TOKEN")
 	if err != nil {
 		pkg.Logger.Fatal().Err(err).Msg("[CRASH]: Could not create Jupyter client/connection check failed")
@@ -69,7 +77,7 @@ func main() {
 	}
 	pkg.Logger.Info().Msg("[MSG]: Connection with jupyter kernel gateway initialized successfully!")
 
-	// Initializing culler 
+	// Initializing culler
 	go culler.StartCuller(context.Background(), jupyterGateway)
 
 	// Initialization of HTTP Server
@@ -83,7 +91,7 @@ func main() {
 		AllowCredentials: true,
 	}).Handler(mux)
 	addr := ":8080"
-	pkg.Logger.Info().Msg(fmt.Sprintf("Server listening on %s", addr))
+	pkg.Logger.Info().Msg(fmt.Sprintf("[MSG]: Server listening on %s", addr))
 	if err := http.ListenAndServe(addr, corsHandler); err != nil {
 		pkg.Logger.Fatal().Err(err).Msg("[CRASH]: Failed to initialize the http server")
 	}
