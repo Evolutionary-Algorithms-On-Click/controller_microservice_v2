@@ -11,6 +11,8 @@ services:
       APP_ENV: "DEVELOPMENT"
       JUPYTER_GATEWAY_URL: "http://jupyter_gateway:8888"
       JUPYTER_AUTH_TOKEN: "YOUR_SECRET_TOKEN"
+      CULL_INTERVAL_MINUTES: 10
+      IDLE_THRESHOLD_MINUTES: 30
     networks:
       - evoc-net
     depends_on:

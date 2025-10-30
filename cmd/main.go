@@ -10,6 +10,7 @@ import (
 
 	"github.com/Thanus-Kumaar/controller_microservice_v2/db"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg"
+	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg/culler"
 	jupyterclient "github.com/Thanus-Kumaar/controller_microservice_v2/pkg/jupyter_client"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/routes"
 	"github.com/joho/godotenv"
@@ -25,7 +26,7 @@ const (
 
 // A wrapper to initialize the database with retry logic to solve Docker race conditions.
 func initDBWithRetry(ctx context.Context, logger zerolog.Logger) error {
-	for i := 0; i < MaxDBRetries; i++ {
+	for i := range MaxDBRetries {
 		err := db.InitDB(ctx)
 		if err == nil {
 			logger.Info().Msg("Database connection pool successfully initialized.")
@@ -67,6 +68,9 @@ func main() {
 		return
 	}
 	pkg.Logger.Info().Msg("[MSG]: Connection with jupyter kernel gateway initialized successfully!")
+
+	// Initializing culler 
+	go culler.StartCuller(context.Background(), jupyterGateway)
 
 	// Initialization of HTTP Server
 	mux := http.NewServeMux()
