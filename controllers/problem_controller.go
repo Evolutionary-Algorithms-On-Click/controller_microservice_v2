@@ -21,45 +21,44 @@ func NewProblemController(problemModule *modules.ProblemModule, logger zerolog.L
 	}
 }
 
-// CreateAndListProblemsHandler handles POST to create and GET to list all problems.
-func (c *ProblemController) CreateAndListProblemsHandler(w http.ResponseWriter, r *http.Request) {
-	// A handler MUST always check the method.
-	switch r.Method {
-	case http.MethodPost:
-		// TODO: Implement logic to create a new problem.
-		// You would use the same logic as the old CreateProblemHandler.
-		http.Error(w, "Not Implemented", http.StatusNotImplemented)
-	case http.MethodGet:
-		// TODO: Implement logic to list all problems for a user.
-		// 1. Extract the user_id from the request context (e.g., from a JWT token).
-		// 2. Call the ProblemModule's GetProblemsByUserID function.
-		// 3. Handle errors and return a JSON response.
-		http.Error(w, "Not Implemented", http.StatusNotImplemented)
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
+// CreateProblemHandler handles POST /api/v1/problems
+func (c *ProblemController) CreateProblemHandler(w http.ResponseWriter, r *http.Request) {
+	// TODO: Implement logic to create a new problem.
+	// 1. Extract user_id from request context (from auth middleware).
+	// 2. Deserialize the JSON request body into models.CreateProblemRequest.
+	// 3. Call c.ProblemModule.CreateProblem.
+	http.Error(w, "Not Implemented", http.StatusNotImplemented)
 }
 
-// ProblemByIDHandler handles GET, PUT, and DELETE for a specific problem ID.
-func (c *ProblemController) ProblemByIDHandler(w http.ResponseWriter, r *http.Request) {
-	// TODO: Extract problem_id from the URL path.
+// ListProblemsHandler handles GET /api/v1/problems
+func (c *ProblemController) ListProblemsHandler(w http.ResponseWriter, r *http.Request) {
+	// TODO: Implement logic to list all problems for a user.
+	// 1. Extract the user_id from the request context.
+	// 2. Call c.ProblemModule.GetProblemsByUserID.
+	http.Error(w, "Not Implemented", http.StatusNotImplemented)
+}
 
-	switch r.Method {
-	case http.MethodGet:
-		// TODO: Implement logic to get a problem by its ID.
-		http.Error(w, "Not Implemented", http.StatusNotImplemented)
-	case http.MethodPut:
-		// TODO: Implement logic to update a problem.
-		// 1. Deserialize the JSON request body.
-		// 2. Call the ProblemModule's UpdateProblem function.
-		// 3. Handle errors and return a JSON response.
-		http.Error(w, "Not Implemented", http.StatusNotImplemented)
-	case http.MethodDelete:
-		// TODO: Implement logic to delete a problem.
-		// 1. Call the ProblemModule's DeleteProblem function.
-		// 2. Handle errors and return a 204 No Content response.
-		http.Error(w, "Not Implemented", http.StatusNotImplemented)
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
+// GetProblemByIDHandler handles GET /api/v1/problems/{id}
+func (c *ProblemController) GetProblemByIDHandler(w http.ResponseWriter, r *http.Request) {
+	problemID := r.PathValue("id")
+	// TODO: Implement logic to get a problem by its ID.
+	// 1. Call c.ProblemModule.GetProblemByID with problemID.
+	http.Error(w, "Not Implemented: "+problemID, http.StatusNotImplemented)
+}
+
+// UpdateProblemByIDHandler handles PUT /api/v1/problems/{id}
+func (c *ProblemController) UpdateProblemByIDHandler(w http.ResponseWriter, r *http.Request) {
+	problemID := r.PathValue("id")
+	// TODO: Implement logic to update a problem.
+	// 1. Deserialize the JSON request body.
+	// 2. Call c.ProblemModule.UpdateProblem with problemID and request body.
+	http.Error(w, "Not Implemented: "+problemID, http.StatusNotImplemented)
+}
+
+// DeleteProblemByIDHandler handles DELETE /api/v1/problems/{id}
+func (c *ProblemController) DeleteProblemByIDHandler(w http.ResponseWriter, r *http.Request) {
+	problemID := r.PathValue("id")
+	// TODO: Implement logic to delete a problem.
+	// 1. Call c.ProblemModule.DeleteProblem with problemID.
+	http.Error(w, "Not Implemented: "+problemID, http.StatusNotImplemented)
 }
