@@ -1,126 +1,55 @@
 package controllers
 
-// import (
-// 	"context"
-// 	"encoding/json"
-// 	"fmt"
-// 	"net/http"
-// 	"time"
+import (
+	"net/http"
 
-// 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg/jupyter_client"
-// 	"github.com/google/uuid"
-// 	"github.com/rs/zerolog"
-// )
+	"github.com/Thanus-Kumaar/controller_microservice_v2/modules"
+	"github.com/rs/zerolog"
+)
 
-// // SessionController holds the primary dependencies required to manage sessions.
-// type SessionController struct {
-// 	JupyterClient *jupyterclient.Client
-// 	Logger        zerolog.Logger
-// 	// TODO: Add Database dependency here later (e.g., DB Pool)
-// }
+// SessionController holds the dependencies for the session handlers.
+type SessionController struct {
+	Module *modules.SessionModule
+	Logger zerolog.Logger
+}
 
-// // NewSessionController creates and returns a new SessionController instance.
-// func NewSessionController(client *jupyterclient.Client, logger zerolog.Logger) *SessionController {
-// 	return &SessionController{
-// 		JupyterClient: client,
-// 		Logger:        logger,
-// 	}
-// }
+// NewSessionController creates and returns a new SessionController.
+func NewSessionController(module *modules.SessionModule, logger zerolog.Logger) *SessionController {
+	return &SessionController{
+		Module: module,
+		Logger: logger,
+	}
+}
 
-// // writeJSONResponse is a helper function to format and write a JSON response.
-// func writeJSONResponse(w http.ResponseWriter, statusCode int, data any) {
-// 	w.Header().Set("Content-Type", "application/json")
-// 	w.WriteHeader(statusCode)
-// 	if data != nil {
-// 		if err := json.NewEncoder(w).Encode(data); err != nil {
-// 			log.Printf("Error encoding response: %v", err)
-// 		}
-// 	}
-// }
+// CreateSessionHandler handles POST /api/v1/sessions
+func (c *SessionController) CreateSessionHandler(w http.ResponseWriter, r *http.Request) {
+	// TODO: Implement logic to create a new session.
+	http.Error(w, "Not Implemented", http.StatusNotImplemented)
+}
 
-// // StartSessionHandler implements POST /api/sessions/start. 
-// // It orchestrates creating a unique session ID and starting the kernel.
-// func (c *SessionController) StartSessionHandler(w http.ResponseWriter, r *http.Request) {
-// 	if r.Method != http.MethodPost {
-// 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-// 		return
-// 	}
+// ListSessionsHandler handles GET /api/v1/sessions
+func (c *SessionController) ListSessionsHandler(w http.ResponseWriter, r *http.Request) {
+	// TODO: Implement logic to list all sessions.
+	http.Error(w, "Not Implemented", http.StatusNotImplemented)
+}
 
-// 	// 1. Generate the unique, persistent session ID
-// 	sessionID := uuid.New().String()
+// GetSessionByIDHandler handles GET /api/v1/sessions/{id}
+func (c *SessionController) GetSessionByIDHandler(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	// TODO: Implement logic to get a session by its ID.
+	http.Error(w, "Not Implemented: get by id "+id, http.StatusNotImplemented)
+}
 
-// 	// 2. Call the Jupyter Client to start the kernel
-// 	// NOTE: The request body should contain the desired language (e.g., "python3").
-// 	// For simplicity, we hardcode python3 for now.
-// 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-// 	defer cancel()
+// UpdateSessionByIDHandler handles PUT /api/v1/sessions/{id}
+func (c *SessionController) UpdateSessionByIDHandler(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	// TODO: Implement logic to update a session.
+	http.Error(w, "Not Implemented: update by id "+id, http.StatusNotImplemented)
+}
 
-// 	kernelInfo, err := c.JupyterClient.StartKernel(ctx, "python3")
-// 	if err != nil {
-// 		c.Logger.Error().Err(err).Msg("Failed to start kernel via gateway")
-// 		http.Error(w, "Could not start kernel service", http.StatusInternalServerError)
-// 		return
-// 	}
-
-// 	// 3. Database Transaction (Atomic Write)
-// 	// TODO: Begin DB transaction here
-// 	// TODO: 3a. Store new Session record (session_id, kernel_id, notebook_id, user_id)
-// 	// TODO: 3b. Commit transaction
-	
-// 	// 4. Construct response for frontend
-// 	response := struct {
-// 		SessionID     string `json:"session_id"`
-// 		KernelID      string `json:"kernel_id"`
-// 		WebSocketPath string `json:"websocket_path"`
-// 	}{
-// 		SessionID:     sessionID,
-// 		KernelID:      kernelInfo.ID,
-// 		WebSocketPath: fmt.Sprintf("/ws/session/%s", sessionID),
-// 	}
-
-// 	c.Logger.Info().Str("session_id", sessionID).Str("kernel_id", kernelInfo.ID).Msg("New session and kernel started successfully")
-// 	writeJSONResponse(w, http.StatusCreated, response)
-// }
-
-// // StopSessionHandler implements DELETE /api/sessions/{session_id}.
-// // It is responsible for killing the kernel and terminating the session record.
-// func (c *SessionController) StopSessionHandler(w http.ResponseWriter, r *http.Request) {
-// 	if r.Method != http.MethodDelete {
-// 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-// 		return
-// 	}
-// 	// 1. Extract session_id from URL path (e.g., using r.URL.Path logic from KernelController)
-// 	// 2. Look up kernel_id from DB using session_id
-// 	// 3. Call c.JupyterClient.DeleteKernel(kernel_id)
-// 	// 4. Update session status in DB to 'terminated'
-	
-// 	http.Error(w, "Not Implemented", http.StatusNotImplemented)
-// }
-
-// // RestartSessionHandler implements POST /api/sessions/{session_id}/restart.
-// // It is responsible for rebooting the kernel memory state.
-// func (c *SessionController) RestartSessionHandler(w http.ResponseWriter, r *http.Request) {
-// 	if r.Method != http.MethodPost {
-// 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-// 		return
-// 	}
-// 	// 1. Extract session_id from URL path
-// 	// 2. Look up kernel_id from DB
-// 	// 3. Call c.JupyterClient.RestartKernel(kernel_id)
-// 	// 4. Return new kernel info (new ID generated by gateway)
-	
-// 	http.Error(w, "Not Implemented", http.StatusNotImplemented)
-// }
-
-// // GetSessionInfoHandler implements GET /api/sessions/{session_id}.
-// // It is responsible for retrieving persistent metadata about the session.
-// func (c *SessionController) GetSessionInfoHandler(w http.ResponseWriter, r *http.Request) {
-// 	if r.Method != http.MethodGet {
-// 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-// 		return
-// 	}
-// 	// 1. Extract session_id from URL path
-// 	// 2. Query DB for session metadata (last_active_at, status, notebook_id, etc.)
-	
-// 	http.Error(w, "Not Implemented", http.StatusNotImplemented)
-// }
+// DeleteSessionByIDHandler handles DELETE /api/v1/sessions/{id}
+func (c *SessionController) DeleteSessionByIDHandler(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	// TODO: Implement logic to delete a session.
+	http.Error(w, "Not Implemented: delete by id "+id, http.StatusNotImplemented)
+}

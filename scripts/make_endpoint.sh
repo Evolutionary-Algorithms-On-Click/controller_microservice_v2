@@ -141,7 +141,6 @@ cat <<EOF > "$REPOSITORY_FILE"
 package repository
 
 import (
-	"context"
 	// "github.com/Thanus-Kumaar/controller_microservice_v2/pkg/models"
 )
 
