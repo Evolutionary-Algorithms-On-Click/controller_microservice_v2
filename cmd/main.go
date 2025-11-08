@@ -70,7 +70,9 @@ func main() {
 		}
 	}
 
-	jupyterGateway, err := jupyterclient.NewClient("http://localhost:8888", "YOUR_SECRET_TOKEN")
+	jupyterGatewayURL := os.Getenv("JUPYTER_GATEWAY_URL")
+  jupyterAuthToken := os.Getenv("JUPYTER_AUTH_TOKEN")
+	jupyterGateway, err := jupyterclient.NewClient(jupyterGatewayURL, jupyterAuthToken)
 	if err != nil {
 		pkg.Logger.Fatal().Err(err).Msg("[CRASH]: Could not create Jupyter client/connection check failed")
 		return
