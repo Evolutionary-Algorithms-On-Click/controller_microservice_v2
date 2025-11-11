@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/Thanus-Kumaar/controller_microservice_v2/controllers"
+	"github.com/Thanus-Kumaar/controller_microservice_v2/db"
+	"github.com/Thanus-Kumaar/controller_microservice_v2/db/repository"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/modules"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg"
 	jupyterclient "github.com/Thanus-Kumaar/controller_microservice_v2/pkg/jupyter_client"
@@ -14,7 +16,8 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) {
 	sessionModule := modules.NewSessionModule(nil) // TODO: Provide real repository implementation
 	sessionController := controllers.NewSessionController(sessionModule, *pkg.Logger)
 
-	problemModule := modules.NewProblemModule()
+	problemRepo := repository.NewProblemRepository(db.Pool)
+	problemModule := modules.NewProblemModule(problemRepo)
 	problemController := controllers.NewProblemController(problemModule, *pkg.Logger)
 	
 	notebookModule := modules.NewNotebookModule()

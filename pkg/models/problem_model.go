@@ -17,7 +17,23 @@ type ProblemStatement struct {
 }
 
 // CreateProblemRequest is the struct for the request body to create a new problem.
+
 type CreateProblemRequest struct {
+
 	Title           string          `json:"title" binding:"required"`
+
 	DescriptionJSON json.RawMessage `json:"description_json" binding:"required"`
+
+}
+
+
+
+// UpdateProblemRequest is the struct for the request body to update a problem.
+
+type UpdateProblemRequest struct {
+
+	Title           string          `json:"title"`
+
+	DescriptionJSON json.RawMessage `json:"description_json"`
+
 }
