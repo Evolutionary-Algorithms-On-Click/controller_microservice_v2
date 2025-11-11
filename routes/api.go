@@ -13,7 +13,8 @@ import (
 
 func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) {
 
-	sessionModule := modules.NewSessionModule(nil) // TODO: Provide real repository implementation
+	sessionRepo := repository.NewSessionRepository(db.Pool)
+	sessionModule := modules.NewSessionModule(sessionRepo, c, *pkg.Logger)
 	sessionController := controllers.NewSessionController(sessionModule, *pkg.Logger)
 
 	problemRepo := repository.NewProblemRepository(db.Pool)
@@ -56,4 +57,5 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) {
 	mux.HandleFunc("DELETE /api/v1/kernels/{id}", kernelController.DeleteKernelHandler)
 	mux.HandleFunc("POST /api/v1/kernels/{id}/interrupt", kernelController.InterruptKernelHandler)
 	mux.HandleFunc("POST /api/v1/kernels/{id}/restart", kernelController.RestartKernelHandler)
+	mux.HandleFunc("GET /api/v1/kernels/{id}/channels", kernelController.KernelChannelsHandler)
 }

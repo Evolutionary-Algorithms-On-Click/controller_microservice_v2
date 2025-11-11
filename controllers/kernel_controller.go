@@ -6,11 +6,20 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
-	jupyterclient "github.com/Thanus-Kumaar/controller_microservice_v2/pkg/jupyter_client"
+	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg/jupyter_client"
+	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
 )
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		// Allow all connections for now. In production, you'd want to restrict this.
+		return true
+	},
+}
 
 // KernelController holds the dependencies required by the handlers.
 type KernelController struct {
@@ -135,4 +144,96 @@ func (c *KernelController) RestartKernelHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 	writeJSONResponse(w, http.StatusOK, info)
+}
+
+// KernelChannelsHandler handles GET /api/v1/kernels/{id}/channels
+func (c *KernelController) KernelChannelsHandler(w http.ResponseWriter, r *http.Request) {
+	kernelID := r.PathValue("id")
+
+	// Upgrade the client's connection
+	feConn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		c.Logger.Error().Err(err).Msg("failed to upgrade connection")
+		return
+	}
+	defer feConn.Close()
+
+	// Get the Jupyter Gateway URL and token from the client
+	gatewayURL := c.JupyterClient.GetGatewayURL()
+	gatewayToken := c.JupyterClient.GetAuthToken()
+
+	// Construct the target websocket URL
+	// Note: Replace http with ws or https with wss
+	wsURL := "ws" + strings.TrimPrefix(gatewayURL, "http")
+	targetURL := fmt.Sprintf("%s/api/kernels/%s/channels", wsURL, kernelID)
+
+	// Create the request headers, including the auth token
+	headers := http.Header{}
+	headers.Set("Authorization", "token "+gatewayToken)
+
+	// Connect to the Jupyter Kernel Gateway
+	kgConn, _, err := websocket.DefaultDialer.Dial(targetURL, headers)
+	if err != nil {
+		c.Logger.Error().Err(err).Str("target", targetURL).Msg("failed to dial kernel gateway")
+		if writeErr := feConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseInternalServerErr, "could not connect to kernel")); writeErr != nil {
+			c.Logger.Error().Err(writeErr).Msg("failed to write close message to frontend")
+		}
+		return
+	}
+	defer kgConn.Close()
+
+	c.Logger.Info().Str("kernel_id", kernelID).Msg("websocket proxy established")
+
+	// Create a channel to signal when one of the proxy goroutines is done
+	done := make(chan struct{})
+
+	// Goroutine to proxy messages from Frontend to Kernel Gateway
+	go func() {
+		defer close(done) // Signal that this goroutine is finished
+		for {
+			messageType, p, err := feConn.ReadMessage()
+			if err != nil {
+				if !websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+					c.Logger.Error().Err(err).Msg("error reading from frontend")
+				}
+				if writeErr := kgConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseAbnormalClosure, err.Error())); writeErr != nil {
+					c.Logger.Error().Err(writeErr).Msg("failed to write close message to kernel gateway")
+				}
+				return
+			}
+			if err := kgConn.WriteMessage(messageType, p); err != nil {
+				c.Logger.Error().Err(err).Msg("error writing to kernel gateway")
+				return
+			}
+		}
+	}()
+
+	// Goroutine to proxy messages from Kernel Gateway to Frontend
+	go func() {
+		for {
+			select {
+			case <-done: // If the other goroutine finished, we're done too.
+				return
+			default:
+				messageType, p, err := kgConn.ReadMessage()
+				if err != nil {
+					if !websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+						c.Logger.Error().Err(err).Msg("error reading from kernel gateway")
+					}
+					if writeErr := feConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseAbnormalClosure, err.Error())); writeErr != nil {
+						c.Logger.Error().Err(writeErr).Msg("failed to write close message to frontend")
+					}
+					return
+				}
+				if err := feConn.WriteMessage(messageType, p); err != nil {
+					c.Logger.Error().Err(err).Msg("error writing to frontend")
+					return
+				}
+			}
+		}
+	}()
+
+	// Wait for one of the goroutines to finish
+	<-done
+	c.Logger.Info().Str("kernel_id", kernelID).Msg("websocket proxy closed")
 }

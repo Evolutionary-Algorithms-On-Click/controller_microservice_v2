@@ -1,9 +1,13 @@
 package controllers
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/Thanus-Kumaar/controller_microservice_v2/modules"
+	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg/models"
 	"github.com/rs/zerolog"
 )
 
@@ -23,8 +27,23 @@ func NewSessionController(module *modules.SessionModule, logger zerolog.Logger) 
 
 // CreateSessionHandler handles POST /api/v1/sessions
 func (c *SessionController) CreateSessionHandler(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement logic to create a new session.
-	http.Error(w, "Not Implemented", http.StatusNotImplemented)
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second) // Increased timeout for kernel start
+	defer cancel()
+
+	var req models.CreateSessionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	session, err := c.Module.CreateSession(ctx, req.NotebookID, req.Language)
+	if err != nil {
+		c.Logger.Error().Err(err).Msg("failed to create session")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSONResponseWithLogger(w, http.StatusCreated, session, &c.Logger)
 }
 
 // ListSessionsHandler handles GET /api/v1/sessions
