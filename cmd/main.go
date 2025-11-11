@@ -71,7 +71,7 @@ func main() {
 	}
 
 	jupyterGatewayURL := os.Getenv("JUPYTER_GATEWAY_URL")
-  jupyterAuthToken := os.Getenv("JUPYTER_AUTH_TOKEN")
+	jupyterAuthToken := os.Getenv("JUPYTER_AUTH_TOKEN")
 	jupyterGateway, err := jupyterclient.NewClient(jupyterGatewayURL, jupyterAuthToken)
 	if err != nil {
 		pkg.Logger.Fatal().Err(err).Msg("[CRASH]: Could not create Jupyter client/connection check failed")

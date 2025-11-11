@@ -61,7 +61,7 @@ func (m *NotebookModule) CreateNotebook(ctx context.Context, req *models.CreateN
 // ListNotebooks retrieves all notebooks (optionally filtered by problem_id, user_id, etc.)
 func (m *NotebookModule) ListNotebooks(ctx context.Context, filters map[string]string) ([]models.Notebook, error) {
 	query := `SELECT id, title, context_minio_url, problem_statement_id, created_at, last_modified_at FROM notebooks`
-	args := []interface{}{}
+	args := []any{}
 	where := ""
 
 	// optional filters (future extension)
@@ -136,7 +136,7 @@ func (m *NotebookModule) UpdateNotebook(ctx context.Context, id string, req *mod
 
 	// Build dynamic update query
 	setClause := ""
-	args := []interface{}{}
+	args := []any{}
 	argIndex := 1
 
 	if req.Title != nil {

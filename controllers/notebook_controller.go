@@ -26,7 +26,7 @@ func NewNotebookController(module *modules.NotebookModule, logger *zerolog.Logge
 }
 
 // helper
-func writeJSONResponseWithLogger(w http.ResponseWriter, status int, v interface{}, logger *zerolog.Logger) {
+func writeJSONResponseWithLogger(w http.ResponseWriter, status int, v any, logger *zerolog.Logger) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if v != nil {
