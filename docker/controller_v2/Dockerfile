@@ -1,26 +1,23 @@
-# Use a recent Go version (matches your go.mod requirement)
-FROM golang:1.24-alpine
+# Use a recent Go version
+FROM golang:1.25-alpine
 
-# Install git (needed for "go mod download" when fetching modules)
-RUN apk add --no-cache git
-
-# Create and switch to the app directory
+# Set the working directory
 WORKDIR /app
 
-# Copy go.mod and go.sum first (this helps cache dependencies)
+# Copy go.mod and go.sum first
 COPY go.mod go.sum ./
 
-# Download dependencies
+# Download dependencies. This layer is only re-built when go.mod/go.sum change.
 RUN go mod download
 
 # Copy the rest of the source code
 COPY . .
 
-# Build the Go binary
-RUN go build -o main ./cmd/main.go
+# Build the application
+RUN go build -o ./build/go-service ./cmd/main.go
 
 # Expose the application port
 EXPOSE 8080
 
-# Run the binary
-CMD ["./main"]
+# Run the application
+CMD ["go", "run", "-v", "./cmd/main.go"]

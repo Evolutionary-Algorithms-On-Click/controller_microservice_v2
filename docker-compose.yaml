@@ -6,6 +6,8 @@ services:
       dockerfile: docker/controller_v2/Dockerfile
     ports:
       - "8080:8080"
+    volumes:
+      - .:/app
     environment:
       DATABASE_URL: "postgresql://root@cockroachdb:26257/defaultdb?sslmode=disable"
       APP_ENV: "DEVELOPMENT"

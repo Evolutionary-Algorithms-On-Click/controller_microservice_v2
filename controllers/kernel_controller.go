@@ -205,6 +205,7 @@ func (c *KernelController) KernelChannelsHandler(w http.ResponseWriter, r *http.
 				c.Logger.Error().Err(err).Msg("error writing to kernel gateway")
 				return
 			}
+			c.Logger.Trace().Str("direction", "FE->KG").Int("size", len(p)).Msg("proxied message")
 		}
 	}()
 
@@ -229,6 +230,7 @@ func (c *KernelController) KernelChannelsHandler(w http.ResponseWriter, r *http.
 					c.Logger.Error().Err(err).Msg("error writing to frontend")
 					return
 				}
+				c.Logger.Trace().Str("direction", "KG->FE").Int("size", len(p)).Msg("proxied message")
 			}
 		}
 	}()
