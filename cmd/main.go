@@ -87,7 +87,7 @@ func main() {
 	routes.RegisterAPIRoutes(mux, jupyterGateway)
 
 	corsHandler := cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"}, // Allows all origins for development
+		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:5173"}, // Allows all origins for development
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"*"},
 		AllowCredentials: true,
