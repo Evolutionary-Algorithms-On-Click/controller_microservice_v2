@@ -68,3 +68,14 @@ CREATE TABLE IF NOT EXISTS cell_variations (
   generation INT NOT NULL,
   parent_variant_id UUID REFERENCES cell_variations(id) ON DELETE SET NULL
 );
+
+-- Remove this in productions, just a dummy data for testing before integrating the auth service
+INSERT INTO users (
+  id, username, email, password, role, acc_status
+) VALUES (
+  "123e4567-e89b-12d3-a456-426614174000",
+  "Tharun Kumarr A",
+  "HelloThere",
+  "Student",
+  "valid"
+);
