@@ -86,12 +86,13 @@ func main() {
 	mux := http.NewServeMux()
 	routes.RegisterAPIRoutes(mux, jupyterGateway)
 
+	loggedMux := middleware.RequestLogger(mux)
 	corsHandler := cors.New(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:5173"}, // Allows all origins for development
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"*"},
 		AllowCredentials: true,
-	}).Handler(mux)
+	}).Handler(loggedMux)
 	addr := ":8080"
 	pkg.Logger.Info().Msg(fmt.Sprintf("[MSG]: Server listening on %s", addr))
 	if err := http.ListenAndServe(addr, corsHandler); err != nil {
