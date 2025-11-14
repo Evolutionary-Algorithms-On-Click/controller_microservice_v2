@@ -13,6 +13,7 @@ import (
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg/culler"
 	jupyterclient "github.com/Thanus-Kumaar/controller_microservice_v2/pkg/jupyter_client"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/routes"
+	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg/middleware"
 	"github.com/joho/godotenv"
 	"github.com/rs/cors"
 	"github.com/rs/zerolog"

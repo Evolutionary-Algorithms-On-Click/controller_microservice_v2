@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg"
+	"github.com/rs/zerolog"
 )
 
 type statusRecorder struct {
@@ -17,21 +18,34 @@ func (r *statusRecorder) WriteHeader(code int) {
 	r.ResponseWriter.WriteHeader(code)
 }
 
-// RequestLogger logs each incoming HTTP request.
 func RequestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
 		start := time.Now()
 
 		rec := &statusRecorder{
 			ResponseWriter: w,
-			status:         http.StatusOK, // default
+			status:         http.StatusOK,
 		}
 
 		next.ServeHTTP(rec, r)
 
 		duration := time.Since(start)
 
-		pkg.Logger.Info().
+		// Select log level based on status code
+		var event *zerolog.Event
+		switch {
+		case rec.status >= 500:
+			event = pkg.Logger.Error()
+		case rec.status >= 400:
+			event = pkg.Logger.Warn()
+		case rec.status >= 300:
+			event = pkg.Logger.Info() // or Warn() if redirects matter
+		default:
+			event = pkg.Logger.Info()
+		}
+
+		event.
 			Str("method", r.Method).
 			Str("path", r.URL.Path).
 			Str("remote_ip", r.RemoteAddr).

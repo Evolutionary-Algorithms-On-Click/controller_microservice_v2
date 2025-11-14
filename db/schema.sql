@@ -70,6 +70,8 @@ CREATE TABLE IF NOT EXISTS cell_variations (
 );
 
 -- Remove this in productions, just a dummy data for testing before integrating the auth service
+DELETE FROM users;
+
 INSERT INTO users (
   id, username, email, password, role, acc_status
 ) VALUES (
