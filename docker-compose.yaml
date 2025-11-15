@@ -15,6 +15,7 @@ services:
       JUPYTER_AUTH_TOKEN: "YOUR_SECRET_TOKEN"
       CULL_INTERVAL_MINUTES: 10
       IDLE_THRESHOLD_MINUTES: 30
+      AUTH_GRPC_SERVER_ADDRESS: "localhost:5001"
     networks:
       - evoc-net
     depends_on:
