@@ -171,6 +171,7 @@ func (c *KernelController) KernelChannelsHandler(w http.ResponseWriter, r *http.
 	headers := http.Header{}
 	headers.Set("Authorization", "token "+gatewayToken)
 
+	c.Logger.Debug().Str("targetURL", targetURL).Interface("headers", headers).Msg("Attempting to dial kernel gateway")
 	// Connect to the Jupyter Kernel Gateway
 	kgConn, _, err := websocket.DefaultDialer.Dial(targetURL, headers)
 	if err != nil {
