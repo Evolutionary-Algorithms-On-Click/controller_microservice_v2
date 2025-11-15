@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg/jupyter_client"
@@ -163,7 +164,6 @@ func (c *KernelController) KernelChannelsHandler(w http.ResponseWriter, r *http.
 	gatewayToken := c.JupyterClient.GetAuthToken()
 
 	// Construct the target websocket URL
-	// Note: Replace http with ws or https with wss
 	wsURL := "ws" + strings.TrimPrefix(gatewayURL, "http")
 	targetURL := fmt.Sprintf("%s/api/kernels/%s/channels", wsURL, kernelID)
 
@@ -184,25 +184,24 @@ func (c *KernelController) KernelChannelsHandler(w http.ResponseWriter, r *http.
 
 	c.Logger.Info().Str("kernel_id", kernelID).Msg("websocket proxy established")
 
-	// Create a channel to signal when one of the proxy goroutines is done
-	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(2)
 
 	// Goroutine to proxy messages from Frontend to Kernel Gateway
 	go func() {
-		defer close(done) // Signal that this goroutine is finished
+		defer wg.Done()
 		for {
 			messageType, p, err := feConn.ReadMessage()
 			if err != nil {
 				if !websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-					c.Logger.Error().Err(err).Msg("error reading from frontend")
+					c.Logger.Warn().Err(err).Msg("error reading from frontend, closing proxy")
 				}
-				if writeErr := kgConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseAbnormalClosure, err.Error())); writeErr != nil {
-					c.Logger.Error().Err(writeErr).Msg("failed to write close message to kernel gateway")
-				}
+				// Closing the kernel connection will cause the other goroutine's ReadMessage to error out.
+				kgConn.Close()
 				return
 			}
 			if err := kgConn.WriteMessage(messageType, p); err != nil {
-				c.Logger.Error().Err(err).Msg("error writing to kernel gateway")
+				c.Logger.Warn().Err(err).Msg("error writing to kernel gateway, closing proxy")
 				return
 			}
 			c.Logger.Trace().Str("direction", "FE->KG").Int("size", len(p)).Msg("proxied message")
@@ -211,31 +210,26 @@ func (c *KernelController) KernelChannelsHandler(w http.ResponseWriter, r *http.
 
 	// Goroutine to proxy messages from Kernel Gateway to Frontend
 	go func() {
+		defer wg.Done()
 		for {
-			select {
-			case <-done: // If the other goroutine finished, we're done too.
+			messageType, p, err := kgConn.ReadMessage()
+			if err != nil {
+				if !websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+					c.Logger.Warn().Err(err).Msg("error reading from kernel gateway, closing proxy")
+				}
+				// Closing the frontend connection will cause the other goroutine's ReadMessage to error out.
+				feConn.Close()
 				return
-			default:
-				messageType, p, err := kgConn.ReadMessage()
-				if err != nil {
-					if !websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-						c.Logger.Error().Err(err).Msg("error reading from kernel gateway")
-					}
-					if writeErr := feConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseAbnormalClosure, err.Error())); writeErr != nil {
-						c.Logger.Error().Err(writeErr).Msg("failed to write close message to frontend")
-					}
-					return
-				}
-				if err := feConn.WriteMessage(messageType, p); err != nil {
-					c.Logger.Error().Err(err).Msg("error writing to frontend")
-					return
-				}
-				c.Logger.Trace().Str("direction", "KG->FE").Int("size", len(p)).Msg("proxied message")
 			}
+			if err := feConn.WriteMessage(messageType, p); err != nil {
+				c.Logger.Warn().Err(err).Msg("error writing to frontend, closing proxy")
+				return
+			}
+			c.Logger.Trace().Str("direction", "KG->FE").Int("size", len(p)).Msg("proxied message")
 		}
 	}()
 
-	// Wait for one of the goroutines to finish
-	<-done
+	// Wait for both goroutines to finish
+	wg.Wait()
 	c.Logger.Info().Str("kernel_id", kernelID).Msg("websocket proxy closed")
 }

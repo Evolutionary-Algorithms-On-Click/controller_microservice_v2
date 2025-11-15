@@ -1,3 +1,13 @@
+-- Drop tables in reverse order of creation to handle dependencies
+DROP TABLE IF EXISTS cell_variations CASCADE;
+DROP TABLE IF EXISTS evolution_runs CASCADE;
+DROP TABLE IF EXISTS cell_outputs CASCADE;
+DROP TABLE IF EXISTS cells CASCADE;
+DROP TABLE IF EXISTS sessions CASCADE;
+DROP TABLE IF EXISTS notebooks CASCADE;
+DROP TABLE IF EXISTS problem_statements CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY,
   username TEXT NOT NULL,
