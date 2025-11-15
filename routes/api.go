@@ -9,9 +9,10 @@ import (
 	"github.com/Thanus-Kumaar/controller_microservice_v2/modules"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg"
 	jupyterclient "github.com/Thanus-Kumaar/controller_microservice_v2/pkg/jupyter_client"
+	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg/middleware" // New import
 )
 
-func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) {
+func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client, authMiddleware *middleware.AuthMiddleware) { // Updated signature
 
 	sessionRepo := repository.NewSessionRepository(db.Pool)
 	sessionModule := modules.NewSessionModule(sessionRepo, c, *pkg.Logger)
@@ -44,7 +45,7 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) {
 
 
 	// Session Routes
-	mux.HandleFunc("POST /api/v1/sessions", sessionController.CreateSessionHandler)
+	mux.Handle("POST /api/v1/sessions", authMiddleware.Authenticate(http.HandlerFunc(sessionController.CreateSessionHandler))) // Applied middleware
 	mux.HandleFunc("GET /api/v1/sessions", sessionController.ListSessionsHandler)
 	mux.HandleFunc("GET /api/v1/sessions/{id}", sessionController.GetSessionByIDHandler)
 	mux.HandleFunc("PUT /api/v1/sessions/{id}", sessionController.UpdateSessionByIDHandler)

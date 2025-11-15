@@ -9,6 +9,7 @@ import (
 // Session represents a user's session in the database.
 type Session struct {
 	ID              uuid.UUID `json:"id"`
+	UserID          uuid.UUID `json:"user_id"`
 	NotebookID      uuid.UUID `json:"notebook_id"`
 	CurrentKernelID uuid.UUID `json:"current_kernel_id"`
 	Status          string    `json:"status"`

@@ -29,9 +29,14 @@ func NewSessionModule(repo repository.SessionRepository, jupyter *jupyterclient.
 }
 
 // CreateSession starts a new kernel and creates a session record in the database.
-func (m *SessionModule) CreateSession(ctx context.Context, notebookIDStr string, language string) (*models.Session, error) {
+func (m *SessionModule) CreateSession(ctx context.Context, userIDStr string, notebookIDStr string, language string) (*models.Session, error) {
 	if m.Jupyter == nil {
 		return nil, errors.New("Jupyter client is not initialized")
+	}
+
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return nil, errors.New("invalid user ID format")
 	}
 
 	notebookID, err := uuid.Parse(notebookIDStr)
@@ -52,6 +57,7 @@ func (m *SessionModule) CreateSession(ctx context.Context, notebookIDStr string,
 
 	newSession := &models.Session{
 		ID:              uuid.New(),
+		UserID:          userID, // Assign the parsed userID
 		NotebookID:      notebookID,
 		CurrentKernelID: kernelID,
 		Status:          "active",
@@ -70,4 +76,3 @@ func (m *SessionModule) CreateSession(ctx context.Context, notebookIDStr string,
 
 	return createdSession, nil
 }
-

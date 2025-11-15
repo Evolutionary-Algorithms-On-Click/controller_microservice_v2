@@ -30,13 +30,20 @@ func (c *SessionController) CreateSessionHandler(w http.ResponseWriter, r *http.
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second) // Increased timeout for kernel start
 	defer cancel()
 
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok || userID == "" {
+		c.Logger.Error().Msg("userID not found in context after authentication")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	var req models.CreateSessionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	session, err := c.Module.CreateSession(ctx, req.NotebookID, req.Language)
+	session, err := c.Module.CreateSession(ctx, userID, req.NotebookID, req.Language)
 	if err != nil {
 		c.Logger.Error().Err(err).Msg("failed to create session")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -45,7 +52,6 @@ func (c *SessionController) CreateSessionHandler(w http.ResponseWriter, r *http.
 
 	writeJSONResponseWithLogger(w, http.StatusCreated, session, &c.Logger)
 }
-
 // ListSessionsHandler handles GET /api/v1/sessions
 func (c *SessionController) ListSessionsHandler(w http.ResponseWriter, r *http.Request) {
 	// TODO: Implement logic to list all sessions.
