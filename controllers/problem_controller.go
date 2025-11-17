@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Thanus-Kumaar/controller_microservice_v2/modules"
+	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg/models"
 	"github.com/rs/zerolog"
 )
@@ -36,7 +37,7 @@ func (c *ProblemController) CreateProblemHandler(w http.ResponseWriter, r *http.
 	const hardcodedUserID = "123e4567-e89b-12d3-a456-426614174000"
 
 	var req models.CreateProblemRequest
-	if err:= json.NewDecoder(r.Body).Decode(&req); err!=nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -46,7 +47,7 @@ func (c *ProblemController) CreateProblemHandler(w http.ResponseWriter, r *http.
 		http.Error(w, fmt.Sprintf("error creating problem statemnet: %v", err), http.StatusInternalServerError)
 		return
 	}
-	writeJSONResponseWithLogger(w, http.StatusCreated, problemStatement, &c.Logger)
+	pkg.WriteJSONResponseWithLogger(w, http.StatusCreated, problemStatement, &c.Logger)
 }
 
 // ListProblemsHandler handles GET /api/v1/problems
@@ -65,7 +66,7 @@ func (c *ProblemController) ListProblemsHandler(w http.ResponseWriter, r *http.R
 	}
 
 	// If no problems are found, it should return an empty list, not an error.
-	writeJSONResponseWithLogger(w, http.StatusOK, problems, &c.Logger)
+	pkg.WriteJSONResponseWithLogger(w, http.StatusOK, problems, &c.Logger)
 }
 
 // GetProblemByIDHandler handles GET /api/v1/problems/{id}
@@ -85,7 +86,7 @@ func (c *ProblemController) GetProblemByIDHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	writeJSONResponseWithLogger(w, http.StatusOK, problem, &c.Logger)
+	pkg.WriteJSONResponseWithLogger(w, http.StatusOK, problem, &c.Logger)
 }
 
 // UpdateProblemByIDHandler handles PUT /api/v1/problems/{id}
@@ -112,7 +113,7 @@ func (c *ProblemController) UpdateProblemByIDHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	writeJSONResponseWithLogger(w, http.StatusOK, updatedProblem, &c.Logger)
+	pkg.WriteJSONResponseWithLogger(w, http.StatusOK, updatedProblem, &c.Logger)
 }
 
 // DeleteProblemByIDHandler handles DELETE /api/v1/problems/{id}

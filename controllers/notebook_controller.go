@@ -1,14 +1,15 @@
 package controllers
 
 import (
-	"context"
+	"time"
 	"encoding/json"
+	"context"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/Thanus-Kumaar/controller_microservice_v2/modules"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg/models"
+	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg" // Added pkg import
 	"github.com/rs/zerolog"
 )
 
@@ -25,16 +26,7 @@ func NewNotebookController(module *modules.NotebookModule, logger *zerolog.Logge
 	}
 }
 
-// helper
-func writeJSONResponseWithLogger(w http.ResponseWriter, status int, v any, logger *zerolog.Logger) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if v != nil {
-		if err := json.NewEncoder(w).Encode(v); err != nil {
-			logger.Error().Err(err).Msg("failed to encode response")
-		}
-	}
-}
+
 
 // CreateNotebookHandler handles POST /api/v1/notebooks
 func (c *NotebookController) CreateNotebookHandler(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +44,7 @@ func (c *NotebookController) CreateNotebookHandler(w http.ResponseWriter, r *htt
 		http.Error(w, fmt.Sprintf("error creating notebook: %v", err), http.StatusInternalServerError)
 		return
 	}
-	writeJSONResponseWithLogger(w, http.StatusCreated, nb, c.Logger)
+	pkg.WriteJSONResponseWithLogger(w, http.StatusCreated, nb, c.Logger)
 }
 
 // ListNotebooksHandler handles GET /api/v1/notebooks
@@ -67,7 +59,7 @@ func (c *NotebookController) ListNotebooksHandler(w http.ResponseWriter, r *http
 		http.Error(w, "error listing notebooks", http.StatusInternalServerError)
 		return
 	}
-	writeJSONResponseWithLogger(w, http.StatusOK, nbs, c.Logger)
+	pkg.WriteJSONResponseWithLogger(w, http.StatusOK, nbs, c.Logger)
 }
 
 // GetNotebookByIDHandler handles GET /api/v1/notebooks/{id}
@@ -82,7 +74,7 @@ func (c *NotebookController) GetNotebookByIDHandler(w http.ResponseWriter, r *ht
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	writeJSONResponseWithLogger(w, http.StatusOK, nb, c.Logger)
+	pkg.WriteJSONResponseWithLogger(w, http.StatusOK, nb, c.Logger)
 }
 
 // UpdateNotebookByIDHandler handles PUT /api/v1/notebooks/{id}
@@ -102,7 +94,7 @@ func (c *NotebookController) UpdateNotebookByIDHandler(w http.ResponseWriter, r 
 		http.Error(w, "error updating notebook", http.StatusInternalServerError)
 		return
 	}
-	writeJSONResponseWithLogger(w, http.StatusOK, updated, c.Logger)
+	pkg.WriteJSONResponseWithLogger(w, http.StatusOK, updated, c.Logger)
 }
 
 // DeleteNotebookByIDHandler handles DELETE /api/v1/notebooks/{id}
@@ -116,5 +108,5 @@ func (c *NotebookController) DeleteNotebookByIDHandler(w http.ResponseWriter, r 
 		http.Error(w, "error deleting notebook", http.StatusInternalServerError)
 		return
 	}
-	writeJSONResponseWithLogger(w, http.StatusNoContent, nil, c.Logger)
+	pkg.WriteJSONResponseWithLogger(w, http.StatusNoContent, nil, c.Logger)
 }

@@ -18,8 +18,8 @@ import (
 	"github.com/rs/cors"
 	"github.com/rs/zerolog"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	// "google.golang.org/grpc"
+	// "google.golang.org/grpc/credentials/insecure"
 )
 
 const (
@@ -77,55 +77,55 @@ func main() {
 
 	// === gRPC Connection to Auth Microservice ==========================
 
-	authGrpcAddr := os.Getenv("AUTH_GRPC_SERVER_ADDRESS")
-	if authGrpcAddr == "" {
-		authGrpcAddr = "localhost:5001"
-		pkg.Logger.Warn().Msgf(
-			"AUTH_GRPC_SERVER_ADDRESS not set, defaulting to %s",
-			authGrpcAddr,
-		)
-	}
+	// authGrpcAddr := os.Getenv("AUTH_GRPC_SERVER_ADDRESS")
+	// if authGrpcAddr == "" {
+	// 	authGrpcAddr = "localhost:5001"
+	// 	pkg.Logger.Warn().Msgf(
+	// 		"AUTH_GRPC_SERVER_ADDRESS not set, defaulting to %s",
+	// 		authGrpcAddr,
+	// 	)
+	// }
 
-	var authConn *grpc.ClientConn
+	// var authConn *grpc.ClientConn
 
-	for i := range MaxDBRetries {
-		pkg.Logger.Info().Msgf(
-			"Attempting to connect to Auth gRPC service at %s (Attempt %d/%d)...",
-			authGrpcAddr, i+1, MaxDBRetries,
-		)
+	// for i := range MaxDBRetries {
+	// 	pkg.Logger.Info().Msgf(
+	// 		"Attempting to connect to Auth gRPC service at %s (Attempt %d/%d)...",
+	// 		authGrpcAddr, i+1, MaxDBRetries,
+	// 	)
 
-		// Replaces deprecated grpc.WithTimeout()
-		ctx, cancel := context.WithTimeout(context.Background(), DBRetryDelay)
-		defer cancel()
+	// 	// Replaces deprecated grpc.WithTimeout()
+	// 	ctx, cancel := context.WithTimeout(context.Background(), DBRetryDelay)
+	// 	defer cancel()
 
-		//nolint:staticcheck
-		conn, err := grpc.DialContext(
-			ctx,
-			authGrpcAddr,
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(),
-		)
+	// 	//nolint:staticcheck
+	// 	conn, err := grpc.DialContext(
+	// 		ctx,
+	// 		authGrpcAddr,
+	// 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	// 		grpc.WithBlock(),
+	// 	)
 
-		if err == nil {
-			authConn = conn
-			pkg.Logger.Info().Msg("[AUTH]: Auth gRPC service connection successful.")
-			break
-		}
+	// 	if err == nil {
+	// 		authConn = conn
+	// 		pkg.Logger.Info().Msg("[AUTH]: Auth gRPC service connection successful.")
+	// 		break
+	// 	}
 
-		pkg.Logger.Warn().Err(err).Msgf(
-			"Auth gRPC connection failed. Retrying in %s...",
-			DBRetryDelay,
-		)
+	// 	pkg.Logger.Warn().Err(err).Msgf(
+	// 		"Auth gRPC connection failed. Retrying in %s...",
+	// 		DBRetryDelay,
+	// 	)
 
-		time.Sleep(DBRetryDelay)
-	}
+	// 	time.Sleep(DBRetryDelay)
+	// }
 
-	if authConn == nil {
-		pkg.Logger.Fatal().Msg("[CRASH]: Failed to connect to Auth gRPC service after multiple retries")
-	}
-	defer authConn.Close()
+	// if authConn == nil {
+	// 	pkg.Logger.Fatal().Msg("[CRASH]: Failed to connect to Auth gRPC service after multiple retries")
+	// }
+	// defer authConn.Close()
 
-	authMiddleware := middleware.NewAuthMiddleware(authConn, logger)
+	// authMiddleware := middleware.NewAuthMiddleware(authConn, logger)
 
 	// === Jupyter Gateway Initialization =================================
 
@@ -145,8 +145,8 @@ func main() {
 	// === HTTP Server =====================================================
 
 	mux := http.NewServeMux()
-	routes.RegisterAPIRoutes(mux, jupyterGateway, authMiddleware)
-
+	// routes.RegisterAPIRoutes(mux, jupyterGateway, authMiddleware)
+	routes.RegisterAPIRoutes(mux, jupyterGateway)
 	loggedMux := middleware.RequestLogger(mux)
 
 	corsHandler := cors.New(cors.Options{
