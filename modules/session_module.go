@@ -76,3 +76,47 @@ func (m *SessionModule) CreateSession(ctx context.Context, userIDStr string, not
 
 	return createdSession, nil
 }
+
+// ListSessions retrieves all sessions for a given user.
+func (m *SessionModule) ListSessions(ctx context.Context, userID uuid.UUID) ([]models.Session, error) {
+	sessions, err := m.Repo.ListSessions(ctx, userID)
+	if err != nil {
+		m.Logger.Error().Err(err).Msg("failed to list sessions from repo")
+		return nil, err
+	}
+
+	return sessions, nil
+}
+
+// GetSessionByID retrieves a single session by its ID for a given user.
+func (m *SessionModule) GetSessionByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*models.Session, error) {
+	session, err := m.Repo.GetSessionByID(ctx, id, userID)
+	if err != nil {
+		m.Logger.Error().Err(err).Msg("failed to get session by id from repo")
+		return nil, err
+	}
+
+	return session, nil
+}
+
+// UpdateSessionStatus updates the status of a session.
+func (m *SessionModule) UpdateSessionStatus(ctx context.Context, id uuid.UUID, userID uuid.UUID, status string) (*models.Session, error) {
+	session, err := m.Repo.UpdateSessionStatus(ctx, id, userID, status)
+	if err != nil {
+		m.Logger.Error().Err(err).Msg("failed to update session status in repo")
+		return nil, err
+	}
+
+	return session, nil
+}
+
+// DeleteSession deletes a session.
+func (m *SessionModule) DeleteSession(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
+	err := m.Repo.DeleteSession(ctx, id, userID)
+	if err != nil {
+		m.Logger.Error().Err(err).Msg("failed to delete session from repo")
+		return err
+	}
+
+	return nil
+}
