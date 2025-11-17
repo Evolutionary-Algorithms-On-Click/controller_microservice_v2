@@ -32,13 +32,12 @@ func NewSessionRepository(db *pgxpool.Pool) SessionRepository {
 // CreateSession inserts a new session into the database.
 func (r *sessionRepository) CreateSession(ctx context.Context, session *models.Session) (*models.Session, error) {
 	query := `
-		INSERT INTO sessions (id, user_id, notebook_id, current_kernel_id, status, last_active_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, user_id, notebook_id, current_kernel_id, status, last_active_at;
+		INSERT INTO sessions (id, notebook_id, current_kernel_id, status, last_active_at)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, notebook_id, current_kernel_id, status, last_active_at;
 	`
 	row := r.db.QueryRow(ctx, query,
 		session.ID,
-		session.UserID,
 		session.NotebookID,
 		session.CurrentKernelID,
 		session.Status,
@@ -48,7 +47,6 @@ func (r *sessionRepository) CreateSession(ctx context.Context, session *models.S
 	var createdSession models.Session
 	if err := row.Scan(
 		&createdSession.ID,
-		&createdSession.UserID,
 		&createdSession.NotebookID,
 		&createdSession.CurrentKernelID,
 		&createdSession.Status,
@@ -60,12 +58,14 @@ func (r *sessionRepository) CreateSession(ctx context.Context, session *models.S
 	return &createdSession, nil
 }
 
-// ListSessions retrieves all sessions for a given user ID.
+// ListSessions retrieves all sessions for a given user ID by joining through notebooks and problem_statements.
 func (r *sessionRepository) ListSessions(ctx context.Context, userID uuid.UUID) ([]models.Session, error) {
 	query := `
-		SELECT id, user_id, notebook_id, current_kernel_id, status, last_active_at
-		FROM sessions
-		WHERE user_id = $1;
+		SELECT s.id, s.notebook_id, s.current_kernel_id, s.status, s.last_active_at
+		FROM sessions s
+		JOIN notebooks n ON s.notebook_id = n.id
+		JOIN problem_statements ps ON n.problem_statement_id = ps.id
+		WHERE ps.created_by = $1;
 	`
 	rows, err := r.db.Query(ctx, query, userID)
 	if err != nil {
@@ -78,7 +78,6 @@ func (r *sessionRepository) ListSessions(ctx context.Context, userID uuid.UUID) 
 		var session models.Session
 		if err := rows.Scan(
 			&session.ID,
-			&session.UserID,
 			&session.NotebookID,
 			&session.CurrentKernelID,
 			&session.Status,
@@ -96,19 +95,20 @@ func (r *sessionRepository) ListSessions(ctx context.Context, userID uuid.UUID) 
 	return sessions, nil
 }
 
-// GetSessionByID retrieves a single session by its ID and user ID.
+// GetSessionByID retrieves a single session by its ID and user ID, joining through notebooks and problem_statements.
 func (r *sessionRepository) GetSessionByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*models.Session, error) {
 	query := `
-		SELECT id, user_id, notebook_id, current_kernel_id, status, last_active_at
-		FROM sessions
-		WHERE id = $1 AND user_id = $2;
+		SELECT s.id, s.notebook_id, s.current_kernel_id, s.status, s.last_active_at
+		FROM sessions s
+		JOIN notebooks n ON s.notebook_id = n.id
+		JOIN problem_statements ps ON n.problem_statement_id = ps.id
+		WHERE s.id = $1 AND ps.created_by = $2;
 	`
 	row := r.db.QueryRow(ctx, query, id, userID)
 
 	var session models.Session
 	if err := row.Scan(
 		&session.ID,
-		&session.UserID,
 		&session.NotebookID,
 		&session.CurrentKernelID,
 		&session.Status,
@@ -125,15 +125,18 @@ func (r *sessionRepository) UpdateSessionStatus(ctx context.Context, id uuid.UUI
 	query := `
 		UPDATE sessions
 		SET status = $3, last_active_at = $4
-		WHERE id = $1 AND user_id = $2
-		RETURNING id, user_id, notebook_id, current_kernel_id, status, last_active_at;
+		WHERE id = $1 AND notebook_id IN (
+			SELECT n.id FROM notebooks n
+			JOIN problem_statements ps ON n.problem_statement_id = ps.id
+			WHERE ps.created_by = $2
+		)
+		RETURNING id, notebook_id, current_kernel_id, status, last_active_at;
 	`
 	row := r.db.QueryRow(ctx, query, id, userID, status, time.Now().UTC())
 
 	var updatedSession models.Session
 	if err := row.Scan(
 		&updatedSession.ID,
-		&updatedSession.UserID,
 		&updatedSession.NotebookID,
 		&updatedSession.CurrentKernelID,
 		&updatedSession.Status,
@@ -149,7 +152,11 @@ func (r *sessionRepository) UpdateSessionStatus(ctx context.Context, id uuid.UUI
 func (r *sessionRepository) DeleteSession(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
 	query := `
 		DELETE FROM sessions
-		WHERE id = $1 AND user_id = $2;
+		WHERE id = $1 AND notebook_id IN (
+			SELECT n.id FROM notebooks n
+			JOIN problem_statements ps ON n.problem_statement_id = ps.id
+			WHERE ps.created_by = $2
+		);
 	`
 	cmdTag, err := r.db.Exec(ctx, query, id, userID)
 	if err != nil {
