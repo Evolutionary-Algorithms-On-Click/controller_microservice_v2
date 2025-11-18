@@ -25,6 +25,10 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) { // Updated
 	notebookModule := modules.NewNotebookModule()
 	notebookController := controllers.NewNotebookController(notebookModule, pkg.Logger)
 
+	cellRepo := repository.NewCellRepository(db.Pool)
+	cellModule := modules.NewCellModule(cellRepo)
+	cellController := controllers.NewCellController(cellModule, *pkg.Logger)
+
 	kernelController := controllers.NewKernelController(c, *pkg.Logger)
 
 	// Register the handler functions with API versioning (v1)
@@ -51,6 +55,19 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) { // Updated
 	mux.HandleFunc("GET /api/v1/sessions/{id}", sessionController.GetSessionByIDHandler)
 	mux.HandleFunc("PUT /api/v1/sessions/{id}", sessionController.UpdateSessionByIDHandler)
 	mux.HandleFunc("DELETE /api/v1/sessions/{id}", sessionController.DeleteSessionByIDHandler)
+
+
+	// Cell Routes
+	mux.HandleFunc("POST /api/v1/notebooks/{notebook_id}/cells", cellController.CreateCellHandler)
+	mux.HandleFunc("GET /api/v1/notebooks/{notebook_id}/cells", cellController.GetCellsByNotebookIDHandler)
+	mux.HandleFunc("GET /api/v1/cells/{cell_id}", cellController.GetCellByIDHandler)
+	mux.HandleFunc("PUT /api/v1/cells/{cell_id}", cellController.UpdateCellHandler)
+	mux.HandleFunc("DELETE /api/v1/cells/{cell_id}", cellController.DeleteCellHandler)
+
+	// Cell Output Routes
+	mux.HandleFunc("POST /api/v1/cells/{cell_id}/outputs", cellController.CreateCellOutputHandler)
+	mux.HandleFunc("GET /api/v1/cells/{cell_id}/outputs", cellController.GetCellOutputsByCellIDHandler)
+	mux.HandleFunc("DELETE /api/v1/outputs/{output_id}", cellController.DeleteCellOutputHandler)
 
 	// Kernel Routes
 	mux.HandleFunc("POST /api/v1/kernels", kernelController.StartKernelHandler)

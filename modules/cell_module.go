@@ -1,0 +1,97 @@
+package modules
+
+import (
+	"context"
+	"errors"
+
+	"github.com/Thanus-Kumaar/controller_microservice_v2/db/repository"
+	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg/models"
+	"github.com/google/uuid"
+)
+
+// CellModule encapsulates the business logic for cells.
+type CellModule struct {
+	Repo repository.CellRepository
+}
+
+// NewCellModule creates and returns a new CellModule.
+func NewCellModule(repo repository.CellRepository) *CellModule {
+	return &CellModule{
+		Repo: repo,
+	}
+}
+
+func (m *CellModule) CreateCell(ctx context.Context, req *models.CreateCellRequest) (*models.Cell, error) {
+	if req == nil {
+		return nil, errors.New("invalid create cell request")
+	}
+
+	cell := &models.Cell{
+		ID:         uuid.New(),
+		NotebookID: req.NotebookID,
+		CellIndex:  req.CellIndex,
+		CellType:   req.CellType,
+		Source:     req.Source,
+	}
+
+	return m.Repo.CreateCell(ctx, cell)
+}
+
+func (m *CellModule) GetCellByID(ctx context.Context, id uuid.UUID) (*models.Cell, error) {
+	return m.Repo.GetCellByID(ctx, id)
+}
+
+func (m *CellModule) GetCellsByNotebookID(ctx context.Context, notebookID uuid.UUID) ([]*models.Cell, error) {
+	return m.Repo.GetCellsByNotebookID(ctx, notebookID)
+}
+
+func (m *CellModule) UpdateCell(ctx context.Context, id uuid.UUID, req *models.UpdateCellRequest) (*models.Cell, error) {
+	cell, err := m.Repo.GetCellByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.CellIndex != nil {
+		cell.CellIndex = *req.CellIndex
+	}
+	if req.CellType != nil {
+		cell.CellType = *req.CellType
+	}
+	if req.Source != nil {
+		cell.Source = *req.Source
+	}
+	if req.ExecutionCount != nil {
+		cell.ExecutionCount = *req.ExecutionCount
+	}
+
+	return m.Repo.UpdateCell(ctx, cell)
+}
+
+func (m *CellModule) DeleteCell(ctx context.Context, id uuid.UUID) error {
+	return m.Repo.DeleteCell(ctx, id)
+}
+
+func (m *CellModule) CreateCellOutput(ctx context.Context, req *models.CreateCellOutputRequest) (*models.CellOutput, error) {
+	if req == nil {
+		return nil, errors.New("invalid create cell output request")
+	}
+
+	output := &models.CellOutput{
+		ID:          uuid.New(),
+		CellID:      req.CellID,
+		OutputIndex: req.OutputIndex,
+		Type:        req.Type,
+		DataJSON:    req.DataJSON,
+		MinioURL:    req.MinioURL,
+	}
+
+	return m.Repo.CreateCellOutput(ctx, output)
+}
+
+func (m *CellModule) GetCellOutputsByCellID(ctx context.Context, cellID uuid.UUID) ([]*models.CellOutput, error) {
+	return m.Repo.GetCellOutputsByCellID(ctx, cellID)
+}
+
+func (m *CellModule) DeleteCellOutput(ctx context.Context, id uuid.UUID) error {
+	return m.Repo.DeleteCellOutput(ctx, id)
+}
