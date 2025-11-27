@@ -29,9 +29,9 @@ type CellOutput struct {
 
 // CreateCellRequest defines the structure for a request to create a new cell.
 type CreateCellRequest struct {
-	NotebookID uuid.UUID `json:"notebook_id"`
-	CellIndex  int       `json:"cell_index"`
-	CellType   string    `json:"cell_type"`
+	NotebookID uuid.UUID `json:"notebook_id" binding:"required"`
+	CellIndex  int       `json:"cell_index" binding:"required"`
+	CellType   string    `json:"cell_type" binding:"required"`
 	Source     string    `json:"source"`
 }
 

@@ -14,7 +14,7 @@ type Notebook struct {
 
 // CreateNotebookRequest is the payload to create a notebook.
 type CreateNotebookRequest struct {
-	Title              string  `json:"title"`
+	Title              string  `json:"title" binding:"required"`
 	ProblemStatementID *string `json:"problem_statement_id,omitempty"`
 }
 
