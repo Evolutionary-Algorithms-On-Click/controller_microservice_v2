@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS cells (
   id UUID PRIMARY KEY,
   notebook_id UUID REFERENCES notebooks(id) ON DELETE CASCADE,
   cell_index INT NOT NULL,
-  cell_type TEXT NOT NULL,
+  cell_type TEXT NOT NULL CHECK (cell_type IN ('code', 'markdown', 'raw')),
   source TEXT NOT NULL,
   execution_count INT
 );
@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS cell_outputs (
   id UUID PRIMARY KEY,
   cell_id UUID REFERENCES cells(id) ON DELETE CASCADE,
   output_index INT NOT NULL,
-  type TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('stream', 'display_data', 'execute_result', 'error')),
   data_json JSONB,
   minio_url TEXT,
   execution_count INT

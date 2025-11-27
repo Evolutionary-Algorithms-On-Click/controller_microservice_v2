@@ -2,7 +2,9 @@ package controllers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/Thanus-Kumaar/controller_microservice_v2/modules"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg"
@@ -10,6 +12,32 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 )
+
+const (
+	CellTypeMarkdown = "markdown"
+	CellTypeCode     = "code"
+	CellTypeRaw      = "raw"
+)
+
+const (
+	OutputTypeStream        = "stream"
+	OutputTypeDisplayData   = "display_data"
+	OutputTypeExecuteResult = "execute_result"
+	OutputTypeError         = "error"
+)
+
+var validCellTypes = map[string]struct{}{
+	CellTypeMarkdown: {},
+	CellTypeCode:     {},
+	CellTypeRaw:      {},
+}
+
+var validOutputTypes = map[string]struct{}{
+	OutputTypeStream:        {},
+	OutputTypeDisplayData:   {},
+	OutputTypeExecuteResult: {},
+	OutputTypeError:         {},
+}
 
 // CellController holds the dependencies for the cell handlers.
 type CellController struct {
@@ -29,6 +57,16 @@ func (c *CellController) CreateCellHandler(w http.ResponseWriter, r *http.Reques
 	var req models.CreateCellRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		pkg.WriteJSONResponseWithLogger(w, http.StatusBadRequest, map[string]string{"error": "Invalid request body"}, &c.Logger)
+		return
+	}
+
+	if _, ok := validCellTypes[req.CellType]; !ok {
+		allowedTypes := make([]string, 0, len(validCellTypes))
+		for k := range validCellTypes {
+			allowedTypes = append(allowedTypes, k)
+		}
+		err_msg := fmt.Sprintf("Invalid cell type: '%s'. Allowed types are: %s", req.CellType, strings.Join(allowedTypes, ", "))
+		pkg.WriteJSONResponseWithLogger(w, http.StatusBadRequest, map[string]string{"error": err_msg}, &c.Logger)
 		return
 	}
 
@@ -92,6 +130,18 @@ func (c *CellController) UpdateCellHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if req.CellType != nil {
+		if _, ok := validCellTypes[*req.CellType]; !ok {
+			allowedTypes := make([]string, 0, len(validCellTypes))
+			for k := range validCellTypes {
+				allowedTypes = append(allowedTypes, k)
+			}
+			err_msg := fmt.Sprintf("Invalid cell type: '%s'. Allowed types are: %s", *req.CellType, strings.Join(allowedTypes, ", "))
+			pkg.WriteJSONResponseWithLogger(w, http.StatusBadRequest, map[string]string{"error": err_msg}, &c.Logger)
+			return
+		}
+	}
+
 	cell, err := c.Module.UpdateCell(r.Context(), cellID, &req)
 	if err != nil {
 		c.Logger.Error().Err(err).Msg("Failed to update cell")
@@ -123,6 +173,16 @@ func (c *CellController) CreateCellOutputHandler(w http.ResponseWriter, r *http.
 	var req models.CreateCellOutputRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		pkg.WriteJSONResponseWithLogger(w, http.StatusBadRequest, map[string]string{"error": "Invalid request body"}, &c.Logger)
+		return
+	}
+
+	if _, ok := validOutputTypes[req.Type]; !ok {
+		allowedTypes := make([]string, 0, len(validOutputTypes))
+		for k := range validOutputTypes {
+			allowedTypes = append(allowedTypes, k)
+		}
+		err_msg := fmt.Sprintf("Invalid output type: '%s'. Allowed types are: %s", req.Type, strings.Join(allowedTypes, ", "))
+		pkg.WriteJSONResponseWithLogger(w, http.StatusBadRequest, map[string]string{"error": err_msg}, &c.Logger)
 		return
 	}
 
