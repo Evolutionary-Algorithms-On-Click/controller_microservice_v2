@@ -2,6 +2,7 @@ package routes
 
 import (
 	"net/http"
+	"os"
 
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/db/repository"
@@ -19,6 +20,12 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) { // Updated
 	sessionController := controllers.NewSessionController(sessionModule, *pkg.Logger)
 
 	problemRepo := repository.NewProblemRepository(db.Pool)
+
+	llmServiceURL := os.Getenv("LLM_MICROSERVICE_URL")
+	llmRepo := repository.NewLlmProxy(llmServiceURL)
+	llmModule := modules.NewLlmModule(llmRepo)
+	llmController := controllers.NewLlmController(llmModule, *pkg.Logger)
+
 	problemModule := modules.NewProblemModule(problemRepo)
 	problemController := controllers.NewProblemController(problemModule, *pkg.Logger)
 	
@@ -68,6 +75,12 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) { // Updated
 	mux.HandleFunc("POST /api/v1/cells/{cell_id}/outputs", cellController.CreateCellOutputHandler)
 	mux.HandleFunc("GET /api/v1/cells/{cell_id}/outputs", cellController.GetCellOutputsByCellIDHandler)
 	mux.HandleFunc("DELETE /api/v1/outputs/{output_id}", cellController.DeleteCellOutputHandler)
+
+
+	// Llm Routes
+	mux.HandleFunc("POST /api/v1/llm/generate", llmController.GenerateNotebookHandler)
+	mux.HandleFunc("POST /api/v1/llm/sessions/{session_id}/modify", llmController.ModifyNotebookHandler)
+	mux.HandleFunc("POST /api/v1/llm/sessions/{session_id}/fix", llmController.FixNotebookHandler)
 
 	// Kernel Routes
 	mux.HandleFunc("POST /api/v1/kernels", kernelController.StartKernelHandler)
