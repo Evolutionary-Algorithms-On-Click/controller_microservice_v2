@@ -10,6 +10,7 @@ type Notebook struct {
 	ProblemStatementID *string   `json:"problem_statement_id,omitempty"`
 	CreatedAt          time.Time `json:"created_at"`
 	LastModifiedAt     time.Time `json:"last_modified_at"`
+	Cells              []Cell    `json:"cells,omitempty"`
 }
 
 // CreateNotebookRequest is the payload to create a notebook.

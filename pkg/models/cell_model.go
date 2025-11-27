@@ -8,12 +8,14 @@ import (
 
 // Cell represents a single cell within a notebook.
 type Cell struct {
-	ID             uuid.UUID `json:"id"`
-	NotebookID     uuid.UUID `json:"notebook_id"`
-	CellIndex      int       `json:"cell_index"`
-	CellType       string    `json:"cell_type"`
-	Source         string    `json:"source"`
-	ExecutionCount int       `json:"execution_count"`
+	ID             uuid.UUID      `json:"id"`
+	NotebookID     uuid.UUID      `json:"notebook_id"`
+	CellIndex      int            `json:"cell_index"`
+	CellType       string         `json:"cell_type"`
+	Source         string         `json:"source"`
+	ExecutionCount int            `json:"execution_count"`
+	Outputs        []CellOutput   `json:"outputs,omitempty"`
+	EvolutionRuns  []EvolutionRun `json:"evolution_runs,omitempty"`
 }
 
 // CellOutput represents the output of a cell execution.
