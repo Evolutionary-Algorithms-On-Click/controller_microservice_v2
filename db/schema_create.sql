@@ -1,16 +1,3 @@
-
-
--- Drop tables in reverse order of creation to handle dependencies
-DROP TABLE IF EXISTS cell_variations CASCADE;
-DROP TABLE IF EXISTS evolution_runs CASCADE;
-DROP TABLE IF EXISTS cell_outputs CASCADE;
-DROP TABLE IF EXISTS cells CASCADE;
-DROP TABLE IF EXISTS sessions CASCADE;
-DROP TABLE IF EXISTS notebooks CASCADE;
-DROP TABLE IF EXISTS problem_statements CASCADE;
-DROP TABLE IF EXISTS users CASCADE;
-
-
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY,
   username TEXT NOT NULL,
@@ -73,18 +60,20 @@ CREATE TABLE IF NOT EXISTS evolution_runs (
   status TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS cell_variations (
+CREATE TABLE cell_variations (
   id UUID PRIMARY KEY,
   evolution_run_id UUID REFERENCES evolution_runs(id) ON DELETE CASCADE,
   code TEXT NOT NULL,
   metric FLOAT NOT NULL,
   is_best BOOLEAN NOT NULL,
-  generation INT NOT NULL,
-  parent_variant_id UUID REFERENCES cell_variations(id) ON DELETE SET NULL
+  generation INT NOT NULL
 );
 
+ALTER TABLE cell_variations
+ADD COLUMN parent_variant_id UUID REFERENCES cell_variations(id) ON DELETE SET NULL;
+
+
 -- Remove this in productions, just a dummy data for testing before integrating the auth service
-DELETE FROM users;
 
 INSERT INTO users (
   id, username, email, password, role, acc_status
