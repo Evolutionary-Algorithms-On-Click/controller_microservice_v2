@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+
 	"io"
 	"net/http"
 )
@@ -30,7 +31,7 @@ func NewLlmProxy(baseURL string) LlmRepository {
 // GenerateNotebook proxies the request to the /generate endpoint of the LLM service.
 func (p *llmProxy) GenerateNotebook(ctx context.Context, body io.Reader) (*http.Response, error) {
 	targetURL := fmt.Sprintf("%s/v1/generate", p.BaseURL)
-	
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create generate request: %w", err)
