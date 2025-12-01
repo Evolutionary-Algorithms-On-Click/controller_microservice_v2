@@ -110,3 +110,23 @@ func (c *NotebookController) DeleteNotebookByIDHandler(w http.ResponseWriter, r 
 	}
 	pkg.WriteJSONResponseWithLogger(w, http.StatusNoContent, nil, c.Logger)
 }
+
+// SaveCellsHandler handles PATCH /api/v1/notebooks/{id}/cells
+func (c *NotebookController) SaveCellsHandler(w http.ResponseWriter, r *http.Request) {
+	notebookID := r.PathValue("id")
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second) // Increased timeout for potentially larger payload
+	defer cancel()
+
+	var req models.SaveCellsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	
+	if err := c.NotebookModule.SaveNotebookCells(ctx, notebookID, &req); err != nil {
+		c.Logger.Error().Err(err).Str("notebook_id", notebookID).Msg("save cells failed")
+		http.Error(w, "error saving notebook cells", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

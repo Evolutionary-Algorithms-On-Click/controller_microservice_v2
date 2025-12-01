@@ -54,6 +54,7 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) { // Updated
 	mux.HandleFunc("GET /api/v1/notebooks/{id}", notebookController.GetNotebookByIDHandler)
 	mux.HandleFunc("PUT /api/v1/notebooks/{id}", notebookController.UpdateNotebookByIDHandler)
 	mux.HandleFunc("DELETE /api/v1/notebooks/{id}", notebookController.DeleteNotebookByIDHandler)
+	mux.HandleFunc("PATCH /api/v1/notebooks/{id}/cells", notebookController.SaveCellsHandler)
 
 
 	// Session Routes

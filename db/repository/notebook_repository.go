@@ -4,11 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg/models"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
@@ -18,6 +20,7 @@ type NotebookRepository interface {
 	GetNotebookByID(ctx context.Context, id string) (*models.Notebook, error)
 	UpdateNotebook(ctx context.Context, id string, req *models.UpdateNotebookRequest) (*models.Notebook, error)
 	DeleteNotebook(ctx context.Context, id string) error
+	SaveNotebookCells(ctx context.Context, notebookID string, req *models.SaveCellsRequest) error
 }
 
 type notebookRepository struct {
@@ -30,7 +33,6 @@ func NewNotebookRepository(pool *pgxpool.Pool) NotebookRepository {
 	}
 }
 
-// Implementations will be moved here.
 func (r *notebookRepository) CreateNotebook(ctx context.Context, req *models.CreateNotebookRequest) (*models.Notebook, error) {
 	id := uuid.New().String()
 	now := time.Now().UTC()
@@ -154,31 +156,31 @@ func (r *notebookRepository) GetNotebookByID(ctx context.Context, id string) (*m
 
 	for rows.Next() {
 		var (
-			cellID             uuid.NullUUID
-			cellNotebookID     uuid.NullUUID
-			cellIndex          sql.NullInt32
-			cellType           sql.NullString
-			cellSource         sql.NullString
-			cellExecCount      sql.NullInt32
-			outputID           uuid.NullUUID
-			outputCellID       uuid.NullUUID
-			outputIndex        sql.NullInt32
-			outputType         sql.NullString
-			outputDataJSON     []byte
-			outputMinioURL     sql.NullString
-			outputExecCount    sql.NullInt32
-			erID               uuid.NullUUID
-			erSourceCellID     uuid.NullUUID
-			erStartTime        sql.NullTime
-			erEndTime          sql.NullTime
-			erStatus           sql.NullString
-			cvID               uuid.NullUUID
-			cvEvolutionRunID   uuid.NullUUID
-			cvCode             sql.NullString
-			cvMetric           sql.NullFloat64
-			cvIsBest           sql.NullBool
-			cvGeneration       sql.NullInt32
-			cvParentVariantID  uuid.NullUUID
+			cellID            uuid.NullUUID
+			cellNotebookID    uuid.NullUUID
+			cellIndex         sql.NullInt32
+			cellType          sql.NullString
+			cellSource        sql.NullString
+			cellExecCount     sql.NullInt32
+			outputID          uuid.NullUUID
+			outputCellID      uuid.NullUUID
+			outputIndex       sql.NullInt32
+			outputType        sql.NullString
+			outputDataJSON    []byte
+			outputMinioURL    sql.NullString
+			outputExecCount   sql.NullInt32
+			erID              uuid.NullUUID
+			erSourceCellID    uuid.NullUUID
+			erStartTime       sql.NullTime
+			erEndTime         sql.NullTime
+			erStatus          sql.NullString
+			cvID              uuid.NullUUID
+			cvEvolutionRunID  uuid.NullUUID
+			cvCode            sql.NullString
+			cvMetric          sql.NullFloat64
+			cvIsBest          sql.NullBool
+			cvGeneration      sql.NullInt32
+			cvParentVariantID uuid.NullUUID
 		)
 
 		if err := rows.Scan(
@@ -254,7 +256,7 @@ func (r *notebookRepository) GetNotebookByID(ctx context.Context, id string) (*m
 			}
 		}
 	}
-	
+
 	if notebook.ID == "" {
 		return nil, errors.New("notebook not found")
 	}
@@ -285,9 +287,6 @@ func (r *notebookRepository) UpdateNotebook(ctx context.Context, id string, req 
 	}
 
 	if setClause == "" {
-		// This business logic should be in the module. 
-		// For now, let's just return the notebook as is.
-		// A better approach is for the module to call GetNotebookByID if req is empty.
 		return r.GetNotebookByID(ctx, id)
 	}
 
@@ -331,3 +330,76 @@ func (r *notebookRepository) DeleteNotebook(ctx context.Context, id string) erro
 	}
 	return nil
 }
+
+func (r *notebookRepository) SaveNotebookCells(ctx context.Context, notebookID string, req *models.SaveCellsRequest) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("could not begin transaction: %w", err)
+	}
+	defer func() {
+		// If commit already ran successfully, rollback will return ErrTxClosed — that’s fine.
+		_ = tx.Rollback(ctx)
+	}()
+
+	var changed bool = false
+
+	if len(req.CellsToDelete) > 0 {
+		changed = true
+		deleteQuery := "DELETE FROM cells WHERE id = ANY($1)"
+		if _, err := tx.Exec(ctx, deleteQuery, req.CellsToDelete); err != nil {
+			return fmt.Errorf("could not delete cells: %w", err)
+		}
+	}
+
+	batch := &pgx.Batch{}
+
+	if len(req.CellsToUpsert) > 0 {
+		changed = true
+		upsertQuery := `
+			INSERT INTO cells (id, notebook_id, cell_type, source)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (id) DO UPDATE SET
+				cell_type = EXCLUDED.cell_type,
+				source = EXCLUDED.source;
+		`
+		for idStr, cellData := range req.CellsToUpsert {
+			cellUUID, err := uuid.Parse(idStr)
+			if err != nil {
+				return fmt.Errorf("invalid UUID in CellsToUpsert: %s", idStr)
+			}
+			batch.Queue(upsertQuery, cellUUID, notebookID, cellData.CellType, cellData.Source)
+		}
+	}
+
+	if len(req.UpdatedOrder) > 0 {
+		changed = true
+		updateIndexQuery := `UPDATE cells SET cell_index = $1 WHERE id = $2`
+		for i, cellIDStr := range req.UpdatedOrder {
+			cellUUID, err := uuid.Parse(cellIDStr)
+			if err != nil {
+				return fmt.Errorf("invalid UUID in UpdatedOrder: %s", cellIDStr)
+			}
+			batch.Queue(updateIndexQuery, i, cellUUID)
+		}
+	}
+
+	if batch.Len() > 0 {
+		br := tx.SendBatch(ctx, batch)
+		if err := br.Close(); err != nil {
+			return fmt.Errorf("failed to execute batch for saving cells: %w", err)
+		}
+	}
+
+	if changed {
+		updateTimeQuery := "UPDATE notebooks SET last_modified_at = $1 WHERE id = $2"
+		if _, err := tx.Exec(ctx, updateTimeQuery, time.Now().UTC(), notebookID); err != nil {
+			return fmt.Errorf("could not update notebook timestamp: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit failed: %w", err)
+	}
+	return nil
+}
+
