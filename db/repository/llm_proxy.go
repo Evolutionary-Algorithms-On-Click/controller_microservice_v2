@@ -15,9 +15,18 @@ type llmProxy struct {
 }
 
 type LlmRepository interface {
-	GenerateNotebook(ctx context.Context, body io.Reader) (*http.Response, error)
-	ModifyNotebook(ctx context.Context, sessionID string, body io.Reader) (*http.Response, error)
-	FixNotebook(ctx context.Context, sessionID string, body io.Reader) (*http.Response, error)
+	GenerateNotebook(
+		ctx context.Context,
+		body io.Reader,
+	) (*http.Response, error)
+	ModifyNotebook(
+		ctx context.Context,
+		body io.Reader,
+	) (*http.Response, error)
+	FixNotebook(
+		ctx context.Context,
+		body io.Reader,
+	) (*http.Response, error)
 }
 
 // NewLlmProxy creates a new llmProxy.
@@ -29,7 +38,10 @@ func NewLlmProxy(baseURL string) LlmRepository {
 }
 
 // GenerateNotebook proxies the request to the /generate endpoint of the LLM service.
-func (p *llmProxy) GenerateNotebook(ctx context.Context, body io.Reader) (*http.Response, error) {
+func (p *llmProxy) GenerateNotebook(
+	ctx context.Context,
+	body io.Reader,
+) (*http.Response, error) {
 	targetURL := fmt.Sprintf("%s/v1/generate", p.BaseURL)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, body)
@@ -47,9 +59,12 @@ func (p *llmProxy) GenerateNotebook(ctx context.Context, body io.Reader) (*http.
 	return resp, nil
 }
 
-// ModifyNotebook proxies the request to the /sessions/{session_id}/modify endpoint.
-func (p *llmProxy) ModifyNotebook(ctx context.Context, sessionID string, body io.Reader) (*http.Response, error) {
-	targetURL := fmt.Sprintf("%s/v1/sessions/%s/modify", p.BaseURL, sessionID)
+// ModifyNotebook proxies the request to the /modify endpoint.
+func (p *llmProxy) ModifyNotebook(
+	ctx context.Context,
+	body io.Reader,
+) (*http.Response, error) {
+	targetURL := fmt.Sprintf("%s/v1/modify", p.BaseURL)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, body)
 	if err != nil {
@@ -67,8 +82,11 @@ func (p *llmProxy) ModifyNotebook(ctx context.Context, sessionID string, body io
 }
 
 // FixNotebook proxies the request to the /sessions/{session_id}/fix endpoint.
-func (p *llmProxy) FixNotebook(ctx context.Context, sessionID string, body io.Reader) (*http.Response, error) {
-	targetURL := fmt.Sprintf("%s/v1/sessions/%s/fix", p.BaseURL, sessionID)
+func (p *llmProxy) FixNotebook(
+	ctx context.Context,
+	body io.Reader,
+) (*http.Response, error) {
+	targetURL := fmt.Sprintf("%s/v1/fix", p.BaseURL)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, body)
 	if err != nil {
