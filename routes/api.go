@@ -81,8 +81,8 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) { // Updated
 
 	// Llm Routes
 	mux.HandleFunc("POST /api/v1/llm/generate", llmController.GenerateNotebookHandler)
-	mux.HandleFunc("POST /api/v1/llm/sessions/{session_id}/modify", llmController.ModifyNotebookHandler)
-	mux.HandleFunc("POST /api/v1/llm/sessions/{session_id}/fix", llmController.FixNotebookHandler)
+	mux.HandleFunc("POST /api/v1/llm/modify", llmController.ModifyNotebookHandler)
+	mux.HandleFunc("POST /api/v1/llm/fix", llmController.FixNotebookHandler)
 
 	// Kernel Routes
 	mux.HandleFunc("POST /api/v1/kernels", kernelController.StartKernelHandler)

@@ -47,7 +47,7 @@ func (c *LlmController) GenerateNotebookHandler(w http.ResponseWriter, r *http.R
 	}
 }
 
-// ModifyNotebookHandler handles POST /api/v1/llm/sessions/{session_id}/modify
+// ModifyNotebookHandler handles POST /api/v1/llm/sessions/modify
 func (c *LlmController) ModifyNotebookHandler(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.PathValue("session_id")
 	ctx := r.Context()
@@ -68,7 +68,7 @@ func (c *LlmController) ModifyNotebookHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
-// FixNotebookHandler handles POST /api/v1/llm/sessions/{session_id}/fix
+// FixNotebookHandler handles POST /api/v1/llm/sessions/fix
 func (c *LlmController) FixNotebookHandler(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.PathValue("session_id")
 	ctx := r.Context()

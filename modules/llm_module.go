@@ -30,7 +30,7 @@ func (m *LlmModule) GenerateNotebook(ctx context.Context, body io.Reader) (*http
 		return nil, fmt.Errorf("failed to read request body: %w", err)
 	}
 
-	var requestData map[string]interface{}
+	var requestData map[string]any
 	if err := json.Unmarshal(bodyBytes, &requestData); err != nil {
 		return nil, fmt.Errorf("failed to decode request body as JSON: %w", err)
 	}
@@ -54,7 +54,7 @@ func (m *LlmModule) ModifyNotebook(ctx context.Context, sessionID string, body i
 		return nil, fmt.Errorf("failed to read request body: %w", err)
 	}
 
-	var requestData map[string]interface{}
+	var requestData map[string]any
 	if err := json.Unmarshal(bodyBytes, &requestData); err != nil {
 		return nil, fmt.Errorf("failed to decode request body as JSON: %w", err)
 	}
@@ -67,12 +67,12 @@ func (m *LlmModule) ModifyNotebook(ctx context.Context, sessionID string, body i
 		return nil, fmt.Errorf("request body must contain a non-empty 'instruction' string")
 	}
 
-	currentNotebook, ok := requestData["current_notebook"].(map[string]interface{})
+	currentNotebook, ok := requestData["notebook"].(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("request body must contain a 'current_notebook' object")
+		return nil, fmt.Errorf("request body must contain a 'notebook' object")
 	}
-	if _, ok := currentNotebook["cells"].([]interface{}); !ok {
-		return nil, fmt.Errorf("'current_notebook' object must contain a 'cells' array")
+	if _, ok := currentNotebook["cells"].([]any); !ok {
+		return nil, fmt.Errorf("'notebook' object must contain a 'cells' array")
 	}
 
 	return m.Repo.ModifyNotebook(ctx, bytes.NewBuffer(bodyBytes))
@@ -85,7 +85,7 @@ func (m *LlmModule) FixNotebook(ctx context.Context, sessionID string, body io.R
 		return nil, fmt.Errorf("failed to read request body: %w", err)
 	}
 
-	var requestData map[string]interface{}
+	var requestData map[string]any
 	if err := json.Unmarshal(bodyBytes, &requestData); err != nil {
 		return nil, fmt.Errorf("failed to decode request body as JSON: %w", err)
 	}
@@ -98,18 +98,18 @@ func (m *LlmModule) FixNotebook(ctx context.Context, sessionID string, body io.R
 		return nil, fmt.Errorf("request body must contain a non-empty 'traceback' string")
 	}
 
-	currentNotebook, ok := requestData["current_notebook"].(map[string]interface{})
+	currentNotebook, ok := requestData["notebook"].(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("request body must contain a 'current_notebook' object")
+		return nil, fmt.Errorf("request body must contain a 'notebook' object")
 	}
-	if _, ok := currentNotebook["cells"].([]interface{}); !ok {
-		return nil, fmt.Errorf("'current_notebook' object must contain a 'cells' array")
+	if _, ok := currentNotebook["cells"].([]any); !ok {
+		return nil, fmt.Errorf("'notebook' object must contain a 'cells' array")
 	}
 
 	return m.Repo.FixNotebook(ctx, bytes.NewBuffer(bodyBytes))
 }
 
-func IsUserIDandNotebookIDPresent(requestData map[string]interface{}) error {
+func IsUserIDandNotebookIDPresent(requestData map[string]any) error {
 	// TODO: User ID should not be passed in the body.
 	// TODO: It should be extracted from the auth context, which i am not going to do now :)
 	// making sure user_id and notebook_id are present
