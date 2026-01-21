@@ -15,6 +15,7 @@ type CellRepository interface {
 	GetCellsByNotebookID(ctx context.Context, notebookID uuid.UUID) ([]*models.Cell, error)
 	UpdateCell(ctx context.Context, cell *models.Cell) (*models.Cell, error)
 	DeleteCell(ctx context.Context, id uuid.UUID) error
+	UpdateCells(ctx context.Context, notebookID uuid.UUID, req *models.UpdateCellsRequest) error
 
 	CreateCellOutput(ctx context.Context, output *models.CellOutput) (*models.CellOutput, error)
 	GetCellOutputsByCellID(ctx context.Context, cellID uuid.UUID) ([]*models.CellOutput, error)
@@ -31,14 +32,15 @@ func NewCellRepository(db *pgxpool.Pool) CellRepository {
 
 func (r *cellRepository) CreateCell(ctx context.Context, cell *models.Cell) (*models.Cell, error) {
 	query := `
-		INSERT INTO cells (id, notebook_id, cell_index, cell_type, source, execution_count)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, notebook_id, cell_index, cell_type, source, execution_count;
+		INSERT INTO cells (id, notebook_id, cell_index, cell_name, cell_type, source, execution_count)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, notebook_id, cell_index, cell_name, cell_type, source, execution_count;
 	`
 	row := r.db.QueryRow(ctx, query,
 		cell.ID,
 		cell.NotebookID,
 		cell.CellIndex,
+		cell.CellName,
 		cell.CellType,
 		cell.Source,
 		cell.ExecutionCount,
@@ -49,6 +51,7 @@ func (r *cellRepository) CreateCell(ctx context.Context, cell *models.Cell) (*mo
 		&createdCell.ID,
 		&createdCell.NotebookID,
 		&createdCell.CellIndex,
+		&createdCell.CellName,
 		&createdCell.CellType,
 		&createdCell.Source,
 		&createdCell.ExecutionCount,
@@ -62,7 +65,7 @@ func (r *cellRepository) CreateCell(ctx context.Context, cell *models.Cell) (*mo
 
 func (r *cellRepository) GetCellByID(ctx context.Context, id uuid.UUID) (*models.Cell, error) {
 	query := `
-		SELECT id, notebook_id, cell_index, cell_type, source, execution_count
+		SELECT id, notebook_id, cell_index, cell_name, cell_type, source, execution_count
 		FROM cells
 		WHERE id = $1;
 	`
@@ -73,6 +76,7 @@ func (r *cellRepository) GetCellByID(ctx context.Context, id uuid.UUID) (*models
 		&cell.ID,
 		&cell.NotebookID,
 		&cell.CellIndex,
+		&cell.CellName,
 		&cell.CellType,
 		&cell.Source,
 		&cell.ExecutionCount,
@@ -86,7 +90,7 @@ func (r *cellRepository) GetCellByID(ctx context.Context, id uuid.UUID) (*models
 
 func (r *cellRepository) GetCellsByNotebookID(ctx context.Context, notebookID uuid.UUID) ([]*models.Cell, error) {
 	query := `
-		SELECT id, notebook_id, cell_index, cell_type, source, execution_count
+		SELECT id, notebook_id, cell_index, cell_name, cell_type, source, execution_count
 		FROM cells
 		WHERE notebook_id = $1
 		ORDER BY cell_index;
@@ -104,6 +108,7 @@ func (r *cellRepository) GetCellsByNotebookID(ctx context.Context, notebookID uu
 			&cell.ID,
 			&cell.NotebookID,
 			&cell.CellIndex,
+			&cell.CellName,
 			&cell.CellType,
 			&cell.Source,
 			&cell.ExecutionCount,
@@ -120,13 +125,14 @@ func (r *cellRepository) GetCellsByNotebookID(ctx context.Context, notebookID uu
 func (r *cellRepository) UpdateCell(ctx context.Context, cell *models.Cell) (*models.Cell, error) {
 	query := `
 		UPDATE cells
-		SET cell_index = $2, cell_type = $3, source = $4, execution_count = $5
+		SET cell_index = $2, cell_name = $3, cell_type = $4, source = $5, execution_count = $6
 		WHERE id = $1
-		RETURNING id, notebook_id, cell_index, cell_type, source, execution_count;
+		RETURNING id, notebook_id, cell_index, cell_name, cell_type, source, execution_count;
 	`
 	row := r.db.QueryRow(ctx, query,
 		cell.ID,
 		cell.CellIndex,
+		cell.CellName,
 		cell.CellType,
 		cell.Source,
 		cell.ExecutionCount,
@@ -137,6 +143,7 @@ func (r *cellRepository) UpdateCell(ctx context.Context, cell *models.Cell) (*mo
 		&updatedCell.ID,
 		&updatedCell.NotebookID,
 		&updatedCell.CellIndex,
+		&updatedCell.CellName,
 		&updatedCell.CellType,
 		&updatedCell.Source,
 		&updatedCell.ExecutionCount,
@@ -152,6 +159,50 @@ func (r *cellRepository) DeleteCell(ctx context.Context, id uuid.UUID) error {
 	_, err := r.db.Exec(ctx, "DELETE FROM cells WHERE id = $1", id)
 	return err
 }
+
+func (r *cellRepository) UpdateCells(ctx context.Context, notebookID uuid.UUID, req *models.UpdateCellsRequest) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	if len(req.CellsToDelete) > 0 {
+		_, err := tx.Exec(ctx, "DELETE FROM cells WHERE id = ANY($1)", req.CellsToDelete)
+		if err != nil {
+			return err
+		}
+	}
+
+	if len(req.CellsToUpsert) > 0 {
+		for id, cellData := range req.CellsToUpsert {
+			query := `
+				INSERT INTO cells (id, notebook_id, cell_type, source, cell_name, execution_count)
+				VALUES ($1, $2, $3, $4, $5, $6)
+				ON CONFLICT (id) DO UPDATE
+				SET source = $4, cell_name = $5, execution_count = $6;
+			`
+			_, err := tx.Exec(ctx, query, id, notebookID, cellData.CellType, cellData.Source, cellData.CellName, cellData.ExecutionCount)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	if len(req.UpdatedOrder) > 0 {
+		for i, cellID := range req.UpdatedOrder {
+			_, err := tx.Exec(ctx, "UPDATE cells SET cell_index = $1 WHERE id = $2", i, cellID)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
 
 func (r *cellRepository) CreateCellOutput(ctx context.Context, output *models.CellOutput) (*models.CellOutput, error) {
 	query := `

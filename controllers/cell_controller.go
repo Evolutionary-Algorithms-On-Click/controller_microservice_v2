@@ -45,12 +45,52 @@ type CellController struct {
 	Logger zerolog.Logger
 }
 
+
+
 // NewCellController creates and returns a new CellController.
 func NewCellController(module *modules.CellModule, logger zerolog.Logger) *CellController {
 	return &CellController{
 		Module: module,
 		Logger: logger,
 	}
+}
+
+func (c *CellController) UpdateCellsHandler(w http.ResponseWriter, r *http.Request) {
+	notebookIDStr := r.PathValue("notebook_id")
+	notebookID, err := uuid.Parse(notebookIDStr)
+	if err != nil {
+		pkg.WriteJSONResponseWithLogger(
+			w, 
+			http.StatusBadRequest, 
+			map[string]string{"error": "Invalid notebook ID"}, 
+			&c.Logger,
+		)
+		return
+	}
+
+	var req models.UpdateCellsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		pkg.WriteJSONResponseWithLogger(
+			w, 
+			http.StatusBadRequest, 
+			map[string]string{"error": "Invalid request body"}, 
+			&c.Logger,
+		)
+		return
+	}
+
+	if err := c.Module.UpdateCells(r.Context(), notebookID, &req); err != nil {
+		c.Logger.Error().Err(err).Msg("Failed to update cells")
+		pkg.WriteJSONResponseWithLogger(
+			w, 
+			http.StatusInternalServerError, 
+			map[string]string{"error": "Failed to update cells"}, 
+			&c.Logger,
+		)
+		return
+	}
+
+	pkg.WriteJSONResponseWithLogger(w, http.StatusOK, map[string]string{"status": "success"}, &c.Logger)
 }
 
 func (c *CellController) CreateCellHandler(w http.ResponseWriter, r *http.Request) {

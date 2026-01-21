@@ -2,6 +2,7 @@ package modules
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 
 	"github.com/Thanus-Kumaar/controller_microservice_v2/db/repository"
@@ -30,8 +31,12 @@ func (m *CellModule) CreateCell(ctx context.Context, req *models.CreateCellReque
 		ID:         uuid.New(),
 		NotebookID: req.NotebookID,
 		CellIndex:  req.CellIndex,
-		CellType:   req.CellType,
-		Source:     req.Source,
+		CellName: sql.NullString{
+			String: req.CellName,
+			Valid:  req.CellName != "",
+		},
+		CellType: req.CellType,
+		Source:   req.Source,
 	}
 
 	return m.Repo.CreateCell(ctx, cell)
@@ -54,6 +59,10 @@ func (m *CellModule) UpdateCell(ctx context.Context, id uuid.UUID, req *models.U
 	if req.CellIndex != nil {
 		cell.CellIndex = *req.CellIndex
 	}
+	if req.CellName != nil {
+		cell.CellName.String = *req.CellName
+		cell.CellName.Valid = true
+	}
 	if req.CellType != nil {
 		cell.CellType = *req.CellType
 	}
@@ -66,6 +75,11 @@ func (m *CellModule) UpdateCell(ctx context.Context, id uuid.UUID, req *models.U
 
 	return m.Repo.UpdateCell(ctx, cell)
 }
+
+func (m *CellModule) UpdateCells(ctx context.Context, notebookID uuid.UUID, req *models.UpdateCellsRequest) error {
+	return m.Repo.UpdateCells(ctx, notebookID, req)
+}
+
 
 func (m *CellModule) DeleteCell(ctx context.Context, id uuid.UUID) error {
 	return m.Repo.DeleteCell(ctx, id)

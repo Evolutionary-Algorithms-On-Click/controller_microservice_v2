@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS cells (
   id UUID PRIMARY KEY,
   notebook_id UUID REFERENCES notebooks(id) ON DELETE CASCADE,
   cell_index INT NOT NULL,
+  cell_name TEXT,
   cell_type TEXT NOT NULL CHECK (cell_type IN ('code', 'markdown', 'raw')),
   source TEXT NOT NULL,
   execution_count INT
