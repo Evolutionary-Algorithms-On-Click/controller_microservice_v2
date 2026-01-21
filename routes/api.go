@@ -37,7 +37,7 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) { // Updated
 	cellModule := modules.NewCellModule(cellRepo)
 	cellController := controllers.NewCellController(cellModule, *pkg.Logger)
 
-	kernelController := controllers.NewKernelController(c, *pkg.Logger)
+	kernelController := controllers.NewKernelController(c, *pkg.Logger, cellRepo)
 
 	// Register the handler functions with API versioning (v1)
 
@@ -67,16 +67,16 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) { // Updated
 
 
 	// Cell Routes
-	// mux.HandleFunc("POST /api/v1/notebooks/{notebook_id}/cells", cellController.CreateCellHandler)
-	// mux.HandleFunc("GET /api/v1/notebooks/{notebook_id}/cells", cellController.GetCellsByNotebookIDHandler)
-	// mux.HandleFunc("GET /api/v1/cells/{cell_id}", cellController.GetCellByIDHandler)
-	// mux.HandleFunc("PUT /api/v1/cells/{cell_id}", cellController.UpdateCellHandler)
-	// mux.HandleFunc("DELETE /api/v1/cells/{cell_id}", cellController.DeleteCellHandler)
+	mux.HandleFunc("POST /api/v1/notebooks/{notebook_id}/cells", cellController.CreateCellHandler)
+	mux.HandleFunc("GET /api/v1/notebooks/{notebook_id}/cells", cellController.GetCellsByNotebookIDHandler)
+	mux.HandleFunc("GET /api/v1/cells/{cell_id}", cellController.GetCellByIDHandler)
+	mux.HandleFunc("PUT /api/v1/cells/{cell_id}", cellController.UpdateCellHandler)
+	mux.HandleFunc("DELETE /api/v1/cells/{cell_id}", cellController.DeleteCellHandler)
 
-	// // Cell Output Routes
-	// mux.HandleFunc("POST /api/v1/cells/{cell_id}/outputs", cellController.CreateCellOutputHandler)
-	// mux.HandleFunc("GET /api/v1/cells/{cell_id}/outputs", cellController.GetCellOutputsByCellIDHandler)
-	// mux.HandleFunc("DELETE /api/v1/outputs/{output_id}", cellController.DeleteCellOutputHandler)
+	// Cell Output Routes
+	mux.HandleFunc("POST /api/v1/cells/{cell_id}/outputs", cellController.CreateCellOutputHandler)
+	mux.HandleFunc("GET /api/v1/cells/{cell_id}/outputs", cellController.GetCellOutputsByCellIDHandler)
+	mux.HandleFunc("DELETE /api/v1/outputs/{output_id}", cellController.DeleteCellOutputHandler)
 
 
 	// Llm Routes

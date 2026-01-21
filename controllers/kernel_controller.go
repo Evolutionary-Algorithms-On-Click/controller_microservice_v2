@@ -10,7 +10,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Thanus-Kumaar/controller_microservice_v2/db/repository"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg/jupyter_client"
+	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg/models"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
 )
@@ -24,15 +27,20 @@ var upgrader = websocket.Upgrader{
 
 // KernelController holds the dependencies required by the handlers.
 type KernelController struct {
-	JupyterClient *jupyterclient.Client
-	Logger        zerolog.Logger
+	JupyterClient  *jupyterclient.Client
+	Logger         zerolog.Logger
+	CellRepo       repository.CellRepository
+	msgIDCellIDMap map[string]uuid.UUID
+	mapMutex       sync.RWMutex
 }
 
 // NewKernelController creates and returns a new KernelController instance.
-func NewKernelController(client *jupyterclient.Client, logger zerolog.Logger) *KernelController {
+func NewKernelController(client *jupyterclient.Client, logger zerolog.Logger, cellRepo repository.CellRepository) *KernelController {
 	return &KernelController{
-		JupyterClient: client,
-		Logger:        logger,
+		JupyterClient:  client,
+		Logger:         logger,
+		CellRepo:       cellRepo,
+		msgIDCellIDMap: make(map[string]uuid.UUID),
 	}
 }
 
@@ -197,10 +205,25 @@ func (c *KernelController) KernelChannelsHandler(w http.ResponseWriter, r *http.
 				if !websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
 					c.Logger.Warn().Err(err).Msg("error reading from frontend, closing proxy")
 				}
-				// Closing the kernel connection will cause the other goroutine's ReadMessage to error out.
 				kgConn.Close()
 				return
 			}
+
+			// If it's an execute_request, store the msg_id -> cell_id mapping
+			var msg jupyterclient.Message
+			if err := json.Unmarshal(p, &msg); err == nil && msg.Header.MsgType == "execute_request" {
+				var metadata map[string]any
+				if err := json.Unmarshal(msg.Metadata, &metadata); err == nil {
+					if cellIDStr, ok := metadata["cell_id"].(string); ok {
+						if cellID, err := uuid.Parse(cellIDStr); err == nil {
+							c.mapMutex.Lock()
+							c.msgIDCellIDMap[msg.Header.MsgID] = cellID
+							c.mapMutex.Unlock()
+						}
+					}
+				}
+			}
+
 			if err := kgConn.WriteMessage(messageType, p); err != nil {
 				c.Logger.Warn().Err(err).Msg("error writing to kernel gateway, closing proxy")
 				return
@@ -222,6 +245,10 @@ func (c *KernelController) KernelChannelsHandler(w http.ResponseWriter, r *http.
 				feConn.Close()
 				return
 			}
+
+			// Asynchronously save the output
+			go c.saveCellOutput(p)
+
 			if err := feConn.WriteMessage(messageType, p); err != nil {
 				c.Logger.Warn().Err(err).Msg("error writing to frontend, closing proxy")
 				return
@@ -234,3 +261,82 @@ func (c *KernelController) KernelChannelsHandler(w http.ResponseWriter, r *http.
 	wg.Wait()
 	c.Logger.Info().Str("kernel_id", kernelID).Msg("websocket proxy closed")
 }
+
+func (c *KernelController) saveCellOutput(p []byte) {
+	var msg jupyterclient.Message
+	if err := json.Unmarshal(p, &msg); err != nil {
+		c.Logger.Debug().Err(err).Msg("failed to unmarshal jupyter message")
+		return
+	}
+
+	outputTypes := map[string]struct{}{
+		"stream":         {},
+		"display_data":   {},
+		"execute_result": {},
+		"error":          {},
+		"execute_reply":  {},
+	}
+	if _, ok := outputTypes[msg.Header.MsgType]; !ok {
+		return
+	}
+
+	c.mapMutex.RLock()
+	cellID, ok := c.msgIDCellIDMap[msg.ParentHeader.MsgID]
+	c.mapMutex.RUnlock()
+
+	if !ok {
+		c.Logger.Warn().Str("parent_msg_id", msg.ParentHeader.MsgID).Msg("cell_id not found for parent message")
+		return
+	}
+
+	// Clean up the map when the execution is done
+	if msg.Header.MsgType == "execute_reply" {
+		c.mapMutex.Lock()
+		delete(c.msgIDCellIDMap, msg.ParentHeader.MsgID)
+		c.mapMutex.Unlock()
+		return // No need to save execute_reply as an output
+	}
+
+	var outputData models.CellOutput
+	outputData.ID = uuid.New()
+	outputData.CellID = cellID
+	outputData.Type = msg.Header.MsgType
+
+	switch msg.Header.MsgType {
+	case "stream":
+		var content jupyterclient.StreamContent
+		if err := json.Unmarshal(msg.Content, &content); err == nil {
+			outputData.DataJSON, _ = json.Marshal(content)
+		}
+	case "display_data":
+		var content jupyterclient.DisplayDataContent
+		if err := json.Unmarshal(msg.Content, &content); err == nil {
+			outputData.DataJSON, _ = json.Marshal(content.Data)
+		}
+	case "execute_result":
+		var content jupyterclient.ExecuteResultContent
+		if err := json.Unmarshal(msg.Content, &content); err == nil {
+			outputData.ExecutionCount = content.ExecutionCount
+			outputData.DataJSON, _ = json.Marshal(content.Data)
+		}
+	case "error":
+		var content jupyterclient.ErrorContent
+		if err := json.Unmarshal(msg.Content, &content); err == nil {
+			outputData.DataJSON, _ = json.Marshal(content)
+		}
+	}
+
+	outputs, err := c.CellRepo.GetCellOutputsByCellID(context.Background(), cellID)
+	if err != nil {
+		c.Logger.Error().Err(err).Msg("failed to get cell outputs to determine next index")
+	}
+	outputData.OutputIndex = len(outputs)
+
+	if _, err := c.CellRepo.CreateCellOutput(context.Background(), &outputData); err != nil {
+		c.Logger.Error().Err(err).Msg("failed to save cell output")
+	} else {
+		c.Logger.Info().Str("cell_id", cellID.String()).Str("type", outputData.Type).Msg("successfully saved cell output")
+	}
+}
+
+
