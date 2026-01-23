@@ -61,11 +61,4 @@ func (m *NotebookModule) DeleteNotebook(ctx context.Context, id string) error {
 	return m.repo.DeleteNotebook(ctx, id)
 }
 
-// SaveNotebookCells handles the business logic for delta-based cell saving.
-func (m *NotebookModule) SaveNotebookCells(ctx context.Context, notebookID string, req *models.SaveCellsRequest) error {
-	if req == nil {
-		return errors.New("invalid save cells request")
-	}
-	// The core logic, including transaction management, will be in the repository.
-	return m.repo.SaveNotebookCells(ctx, notebookID, req)
-}
+

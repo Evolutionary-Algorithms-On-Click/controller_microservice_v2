@@ -25,15 +25,4 @@ type UpdateNotebookRequest struct {
 	ProblemStatementID *string `json:"problem_statement_id,omitempty"`
 }
 
-// SaveCellsRequest is the delta-based payload for saving notebook cells.
-type SaveCellsRequest struct {
-	UpdatedOrder  []string                `json:"updated_order,omitempty"`
-	CellsToUpsert map[string]CellToUpsert `json:"cells_to_upsert,omitempty"`
-	CellsToDelete []string                `json:"cells_to_delete,omitempty"`
-}
 
-// CellToUpsert contains the data for a new or modified cell.
-type CellToUpsert struct {
-	CellType string `json:"cell_type" binding:"required"`
-	Source   string `json:"source"`
-}

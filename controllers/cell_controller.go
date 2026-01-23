@@ -3,6 +3,7 @@ package controllers
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -68,8 +69,22 @@ func (c *CellController) UpdateCellsHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		c.Logger.Error().Err(err).Msg("Failed to read request body")
+		pkg.WriteJSONResponseWithLogger(
+			w,
+			http.StatusInternalServerError,
+			map[string]string{"error": "Failed to read request body"},
+			&c.Logger,
+		)
+		return
+	}
+	c.Logger.Info().RawJSON("raw_request_body", body).Msg("Received request to update cells")
+
 	var req models.UpdateCellsRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.Logger.Error().Err(err).Msg("Failed to decode request body")
 		pkg.WriteJSONResponseWithLogger(
 			w, 
 			http.StatusBadRequest, 
@@ -78,6 +93,8 @@ func (c *CellController) UpdateCellsHandler(w http.ResponseWriter, r *http.Reque
 		)
 		return
 	}
+
+	c.Logger.Info().Interface("decoded_request", req).Msg("Decoded request body")
 
 	if err := c.Module.UpdateCells(r.Context(), notebookID, &req); err != nil {
 		c.Logger.Error().Err(err).Msg("Failed to update cells")
@@ -212,9 +229,11 @@ func (c *CellController) DeleteCellHandler(w http.ResponseWriter, r *http.Reques
 func (c *CellController) CreateCellOutputHandler(w http.ResponseWriter, r *http.Request) {
 	var req models.CreateCellOutputRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		c.Logger.Error().Err(err).Msg("CreateCellOutputHandler: Invalid request body")
 		pkg.WriteJSONResponseWithLogger(w, http.StatusBadRequest, map[string]string{"error": "Invalid request body"}, &c.Logger)
 		return
 	}
+	c.Logger.Debug().Interface("request_body", req).Msg("CreateCellOutputHandler: Decoded request body")
 
 	if _, ok := validOutputTypes[req.Type]; !ok {
 		allowedTypes := make([]string, 0, len(validOutputTypes))
@@ -222,17 +241,18 @@ func (c *CellController) CreateCellOutputHandler(w http.ResponseWriter, r *http.
 			allowedTypes = append(allowedTypes, k)
 		}
 		err_msg := fmt.Sprintf("Invalid output type: '%s'. Allowed types are: %s", req.Type, strings.Join(allowedTypes, ", "))
+		c.Logger.Error().Str("invalid_output_type", req.Type).Msg("CreateCellOutputHandler: Invalid output type")
 		pkg.WriteJSONResponseWithLogger(w, http.StatusBadRequest, map[string]string{"error": err_msg}, &c.Logger)
 		return
 	}
-
+	c.Logger.Debug().Str("cell_id", req.CellID.ToUUID().String()).Msg("CreateCellOutputHandler: Calling module to create cell output")
 	output, err := c.Module.CreateCellOutput(r.Context(), &req)
 	if err != nil {
-		c.Logger.Error().Err(err).Msg("Failed to create cell output")
+		c.Logger.Error().Err(err).Msg("CreateCellOutputHandler: Failed to create cell output")
 		pkg.WriteJSONResponseWithLogger(w, http.StatusInternalServerError, map[string]string{"error": "Failed to create cell output"}, &c.Logger)
 		return
 	}
-
+	c.Logger.Info().Str("created_output_id", output.ID.String()).Msg("CreateCellOutputHandler: Successfully created cell output")
 	pkg.WriteJSONResponseWithLogger(w, http.StatusCreated, output, &c.Logger)
 }
 

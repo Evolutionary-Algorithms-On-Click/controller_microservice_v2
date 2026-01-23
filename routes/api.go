@@ -33,8 +33,8 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) { // Updated
 	notebookModule := modules.NewNotebookModule(notebookRepo)
 	notebookController := controllers.NewNotebookController(notebookModule, pkg.Logger)
 
-	cellRepo := repository.NewCellRepository(db.Pool)
-	cellModule := modules.NewCellModule(cellRepo)
+	cellRepo := repository.NewCellRepository(db.Pool, *pkg.Logger)
+	cellModule := modules.NewCellModule(cellRepo, *pkg.Logger)
 	cellController := controllers.NewCellController(cellModule, *pkg.Logger)
 
 	kernelController := controllers.NewKernelController(c, *pkg.Logger, cellRepo)

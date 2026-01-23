@@ -8,17 +8,20 @@ import (
 	"github.com/Thanus-Kumaar/controller_microservice_v2/db/repository"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg/models"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 )
 
 // CellModule encapsulates the business logic for cells.
 type CellModule struct {
 	Repo repository.CellRepository
+	Logger zerolog.Logger
 }
 
 // NewCellModule creates and returns a new CellModule.
-func NewCellModule(repo repository.CellRepository) *CellModule {
+func NewCellModule(repo repository.CellRepository, logger zerolog.Logger) *CellModule {
 	return &CellModule{
 		Repo: repo,
+		Logger: logger,
 	}
 }
 
@@ -28,7 +31,7 @@ func (m *CellModule) CreateCell(ctx context.Context, req *models.CreateCellReque
 	}
 
 	cell := &models.Cell{
-		ID:         uuid.New(),
+		ID:         models.StringUUID(uuid.New()),
 		NotebookID: req.NotebookID,
 		CellIndex:  req.CellIndex,
 		CellName: sql.NullString{
@@ -77,6 +80,11 @@ func (m *CellModule) UpdateCell(ctx context.Context, id uuid.UUID, req *models.U
 }
 
 func (m *CellModule) UpdateCells(ctx context.Context, notebookID uuid.UUID, req *models.UpdateCellsRequest) error {
+	m.Logger.Info().
+		Str("notebook_id", notebookID.String()).
+		Int("delete_count", len(req.CellsToDelete)).
+		Int("upsert_count", len(req.CellsToUpsert)).
+		Msg("Updating cells in module")
 	return m.Repo.UpdateCells(ctx, notebookID, req)
 }
 
@@ -98,8 +106,14 @@ func (m *CellModule) CreateCellOutput(ctx context.Context, req *models.CreateCel
 		DataJSON:    req.DataJSON,
 		MinioURL:    req.MinioURL,
 	}
-
-	return m.Repo.CreateCellOutput(ctx, output)
+	m.Logger.Debug().Str("generated_output_id", output.ID.String()).Str("cell_id", output.CellID.ToUUID().String()).Msg("CellModule: Creating cell output")
+	createdOutput, err := m.Repo.CreateCellOutput(ctx, output)
+	if err != nil {
+		m.Logger.Error().Err(err).Msg("CellModule: Failed to create cell output in repository")
+		return nil, err
+	}
+	m.Logger.Info().Str("created_output_id", createdOutput.ID.String()).Msg("CellModule: Successfully created cell output in repository")
+	return createdOutput, nil
 }
 
 func (m *CellModule) GetCellOutputsByCellID(ctx context.Context, cellID uuid.UUID) ([]*models.CellOutput, error) {

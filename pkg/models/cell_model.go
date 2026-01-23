@@ -9,7 +9,7 @@ import (
 
 // Cell represents a single cell within a notebook.
 type Cell struct {
-	ID             uuid.UUID      `json:"id"`
+	ID             StringUUID     `json:"id"`
 	NotebookID     uuid.UUID      `json:"notebook_id"`
 	CellIndex      int            `json:"cell_index"`
 	CellName       sql.NullString `json:"cell_name"`
@@ -23,7 +23,7 @@ type Cell struct {
 // CellOutput represents the output of a cell execution.
 type CellOutput struct {
 	ID             uuid.UUID       `json:"id"`
-	CellID         uuid.UUID       `json:"cell_id"`
+	CellID         StringUUID      `json:"cell_id"`
 	OutputIndex    int             `json:"output_index"`
 	Type           string          `json:"type"`
 	DataJSON       json.RawMessage `json:"data_json"`
@@ -49,24 +49,25 @@ type UpdateCellRequest struct {
 	ExecutionCount *int    `json:"execution_count,omitempty"`
 }
 
-// UpdateCellsRequest defines the structure for a bulk cell update request.
+// UpdateCellsRequest defines the. structure for a bulk cell update request.
 type UpdateCellsRequest struct {
-	UpdatedOrder  []uuid.UUID                  `json:"updated_order"`
-	CellsToDelete []uuid.UUID                  `json:"cells_to_delete"`
-	CellsToUpsert map[uuid.UUID]CellDataForUpsert `json:"cells_to_upsert"`
+	UpdatedOrder  []StringUUID                  `json:"updated_order"`
+	CellsToDelete []StringUUID                  `json:"cells_to_delete"`
+	CellsToUpsert map[string]CellDataForUpsert `json:"cells_to_upsert"`
 }
 
 // CellDataForUpsert represents the data for a cell to be upserted.
 type CellDataForUpsert struct {
-	CellType       string         `json:"cell_type"`
-	Source         string         `json:"source"`
-	CellName       sql.NullString `json:"cell_name"`
-	ExecutionCount int            `json:"execution_count"`
+	CellType       string          `json:"cell_type"`
+	Source         string          `json:"source"`
+	CellName       *string         `json:"cell_name"`
+	ExecutionCount int             `json:"execution_count"`
+	Metadata       json.RawMessage `json:"metadata"`
 }
 
 // CreateCellOutputRequest defines the structure for a request to create a new cell output.
 type CreateCellOutputRequest struct {
-	CellID      uuid.UUID       `json:"cell_id"`
+	CellID      StringUUID      `json:"cell_id"`
 	OutputIndex int             `json:"output_index"`
 	Type        string          `json:"type"`
 	DataJSON    json.RawMessage `json:"data_json"`

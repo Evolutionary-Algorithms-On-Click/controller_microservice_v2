@@ -299,7 +299,7 @@ func (c *KernelController) saveCellOutput(p []byte) {
 
 	var outputData models.CellOutput
 	outputData.ID = uuid.New()
-	outputData.CellID = cellID
+	outputData.CellID = models.StringUUID(cellID)
 	outputData.Type = msg.Header.MsgType
 
 	switch msg.Header.MsgType {

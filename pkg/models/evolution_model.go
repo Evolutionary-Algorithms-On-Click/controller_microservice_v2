@@ -9,7 +9,7 @@ import (
 // EvolutionRun represents an evolution run for a cell.
 type EvolutionRun struct {
 	ID           uuid.UUID       `json:"id"`
-	SourceCellID uuid.UUID       `json:"source_cell_id"`
+	SourceCellID StringUUID      `json:"source_cell_id"`
 	StartTime    time.Time       `json:"start_time"`
 	EndTime      *time.Time      `json:"end_time,omitempty"`
 	Status       string          `json:"status"`
