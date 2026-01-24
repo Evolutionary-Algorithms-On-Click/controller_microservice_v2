@@ -4,39 +4,37 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg"
-	"github.com/Thanus-Kumaar/controller_microservice_v2/db/repository"
-	"github.com/Thanus-Kumaar/controller_microservice_v2/db"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/controllers"
+	"github.com/Thanus-Kumaar/controller_microservice_v2/db"
+	"github.com/Thanus-Kumaar/controller_microservice_v2/db/repository"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/modules"
+	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg"
 	jupyterclient "github.com/Thanus-Kumaar/controller_microservice_v2/pkg/jupyter_client"
 	// "github.com/Thanus-Kumaar/controller_microservice_v2/pkg/middleware" // New import
 )
 
-func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) { // Updated signature
+func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) {
 
-	sessionRepo := repository.NewSessionRepository(db.Pool)
-	sessionModule := modules.NewSessionModule(sessionRepo, c, *pkg.Logger)
-	sessionController := controllers.NewSessionController(sessionModule, *pkg.Logger)
-
-	problemRepo := repository.NewProblemRepository(db.Pool)
-
-	llmServiceURL := os.Getenv("LLM_MICROSERVICE_URL")
-	llmRepo := repository.NewLlmProxy(llmServiceURL)
-	llmModule := modules.NewLlmModule(llmRepo)
-	llmController := controllers.NewLlmController(llmModule, *pkg.Logger)
-
-	problemModule := modules.NewProblemModule(problemRepo)
-	problemController := controllers.NewProblemController(problemModule, *pkg.Logger)
-	
+	// Initialize Repositories
 	notebookRepo := repository.NewNotebookRepository(db.Pool)
-	notebookModule := modules.NewNotebookModule(notebookRepo)
-	notebookController := controllers.NewNotebookController(notebookModule, pkg.Logger)
-
+	llmRepo := repository.NewLlmProxy(os.Getenv("LLM_MICROSERVICE_URL"))
+	sessionRepo := repository.NewSessionRepository(db.Pool)
+	problemRepo := repository.NewProblemRepository(db.Pool)
 	cellRepo := repository.NewCellRepository(db.Pool, *pkg.Logger)
-	cellModule := modules.NewCellModule(cellRepo, *pkg.Logger)
-	cellController := controllers.NewCellController(cellModule, *pkg.Logger)
 
+	// Initialize Modules
+	notebookModule := modules.NewNotebookModule(notebookRepo)
+	llmModule := modules.NewLlmModule(llmRepo)
+	sessionModule := modules.NewSessionModule(sessionRepo, c, *pkg.Logger)
+	problemModule := modules.NewProblemModule(problemRepo)
+	cellModule := modules.NewCellModule(cellRepo, *pkg.Logger)
+
+	// Initialize Controllers
+	notebookController := controllers.NewNotebookController(notebookModule, pkg.Logger)
+	sessionController := controllers.NewSessionController(sessionModule, *pkg.Logger)
+	llmController := controllers.NewLlmController(llmModule, *pkg.Logger)
+	problemController := controllers.NewProblemController(problemModule, *pkg.Logger)
+	cellController := controllers.NewCellController(cellModule, *pkg.Logger)
 	kernelController := controllers.NewKernelController(c, *pkg.Logger, cellRepo)
 
 	// Register the handler functions with API versioning (v1)
@@ -56,7 +54,6 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) { // Updated
 	mux.HandleFunc("DELETE /api/v1/notebooks/{id}", notebookController.DeleteNotebookByIDHandler)
 	mux.HandleFunc("PATCH /api/v1/notebooks/{notebook_id}/cells", cellController.UpdateCellsHandler)
 
-
 	// Session Routes
 	// mux.Handle("POST /api/v1/sessions", authMiddleware.Authenticate(http.HandlerFunc(sessionController.CreateSessionHandler))) // Applied middleware
 	mux.HandleFunc("POST /api/v1/sessions", sessionController.CreateSessionHandler)
@@ -64,7 +61,6 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) { // Updated
 	mux.HandleFunc("GET /api/v1/sessions/{id}", sessionController.GetSessionByIDHandler)
 	mux.HandleFunc("PUT /api/v1/sessions/{id}", sessionController.UpdateSessionByIDHandler)
 	mux.HandleFunc("DELETE /api/v1/sessions/{id}", sessionController.DeleteSessionByIDHandler)
-
 
 	// Cell Routes
 	mux.HandleFunc("POST /api/v1/notebooks/{notebook_id}/cells", cellController.CreateCellHandler)
@@ -77,7 +73,6 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) { // Updated
 	mux.HandleFunc("POST /api/v1/cells/{cell_id}/outputs", cellController.CreateCellOutputHandler)
 	mux.HandleFunc("GET /api/v1/cells/{cell_id}/outputs", cellController.GetCellOutputsByCellIDHandler)
 	mux.HandleFunc("DELETE /api/v1/outputs/{output_id}", cellController.DeleteCellOutputHandler)
-
 
 	// Llm Routes
 	mux.HandleFunc("POST /api/v1/llm/generate", llmController.GenerateNotebookHandler)
