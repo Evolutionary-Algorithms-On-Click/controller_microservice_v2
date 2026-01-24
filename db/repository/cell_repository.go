@@ -188,6 +188,20 @@ func (r *cellRepository) UpdateCells(ctx context.Context, notebookID uuid.UUID, 
 		_ = tx.Rollback(ctx)
 	}()
 
+	// Update notebook requirements if provided
+	if req.Requirements != nil {
+		r.Logger.Info().
+			Str("notebook_id", notebookID.String()).
+			Str("new_requirements", *req.Requirements).
+			Msg("Updating notebook requirements")
+		
+		_, err := tx.Exec(ctx, "UPDATE notebooks SET requirements = $1 WHERE id = $2", *req.Requirements, notebookID)
+		if err != nil {
+			r.Logger.Error().Err(err).Msg("Failed to update notebook requirements")
+			return err
+		}
+	}
+
 	// 1. Handle Deletions
 	if len(req.CellsToDelete) > 0 {
 		cellsToDeleteUUIDs := make([]uuid.UUID, len(req.CellsToDelete))
@@ -201,23 +215,25 @@ func (r *cellRepository) UpdateCells(ctx context.Context, notebookID uuid.UUID, 
 		}
 	}
 
-	// Create a map for quick index lookup, now using string keys for the map
-	orderMap := make(map[string]int) // Changed key type
+	orderMap := make(map[string]int)
 	for i, id := range req.UpdatedOrder {
-		orderMap[id.ToUUID().String()] = i // Convert StringUUID to string for map key
+		orderMap[id.ToUUID().String()] = i
 	}
 
-	// 2. Handle Upserts and Reordering in one go
+	upsertedIDs := make(map[string]bool)
+
+	// 2. Handle Upserts for modified/new cells
 	if len(req.CellsToUpsert) > 0 {
 		r.Logger.Info().Interface("cells_to_upsert", req.CellsToUpsert).Msg("Upserting cells")
-		for idStr, cellData := range req.CellsToUpsert { // idStr is string
-			cellUUID, err := uuid.Parse(idStr) // Parse string ID to UUID
+		for idStr, cellData := range req.CellsToUpsert {
+			upsertedIDs[idStr] = true // Mark this ID as handled
+			cellUUID, err := uuid.Parse(idStr)
 			if err != nil {
 				r.Logger.Error().Err(err).Str("cell_id_string", idStr).Msg("Failed to parse cell ID string to UUID")
 				return err
 			}
 
-			cellIndex, ok := orderMap[idStr] // Lookup using string ID
+			cellIndex, ok := orderMap[idStr]
 			if !ok {
 				cellIndex = 9999
 				r.Logger.Warn().Str("cell_id", idStr).Msg("Cell ID found in upsert map but not in updated order. Assigning high index.")
@@ -244,12 +260,16 @@ func (r *cellRepository) UpdateCells(ctx context.Context, notebookID uuid.UUID, 
 				return err // Rollback
 			}
 		}
-	} else if len(req.UpdatedOrder) > 0 {
-		// This block handles reordering-only updates
-		r.Logger.Info().Msg("Performing reorder-only update")
-		for i, cellID := range req.UpdatedOrder {
-			if _, err := tx.Exec(ctx, "UPDATE cells SET cell_index = $1 WHERE id = $2", i, cellID.ToUUID()); err != nil {
-				r.Logger.Error().Err(err).Str("cell_id", cellID.ToUUID().String()).Msg("Failed to reorder cell")
+	}
+
+	// 3. Handle reordering for cells that were not upserted
+	r.Logger.Info().Msg("Performing reorder-only updates for remaining cells")
+	for idStr, index := range orderMap {
+		if !upsertedIDs[idStr] {
+			cellUUID, _ := uuid.Parse(idStr) // Error already handled if it was in orderMap
+			r.Logger.Info().Str("cell_id", idStr).Int("new_index", index).Msg("Updating index for reordered-only cell")
+			if _, err := tx.Exec(ctx, "UPDATE cells SET cell_index = $1 WHERE id = $2", index, cellUUID); err != nil {
+				r.Logger.Error().Err(err).Str("cell_id", idStr).Msg("Failed to reorder cell")
 				return err
 			}
 		}

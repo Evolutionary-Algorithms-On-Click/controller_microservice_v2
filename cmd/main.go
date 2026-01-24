@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/Thanus-Kumaar/controller_microservice_v2/db"
+	"github.com/Thanus-Kumaar/controller_microservice_v2/db" 
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg/culler"
 	jupyterclient "github.com/Thanus-Kumaar/controller_microservice_v2/pkg/jupyter_client"
@@ -145,7 +145,6 @@ func main() {
 	// === HTTP Server =====================================================
 
 	mux := http.NewServeMux()
-	// routes.RegisterAPIRoutes(mux, jupyterGateway, authMiddleware)
 	routes.RegisterAPIRoutes(mux, jupyterGateway)
 	loggedMux := middleware.RequestLogger(mux)
 

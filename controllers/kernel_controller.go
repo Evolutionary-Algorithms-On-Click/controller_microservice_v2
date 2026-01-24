@@ -211,24 +211,35 @@ func (c *KernelController) KernelChannelsHandler(w http.ResponseWriter, r *http.
 
 			// If it's an execute_request, store the msg_id -> cell_id mapping
 			var msg jupyterclient.Message
-			if err := json.Unmarshal(p, &msg); err == nil && msg.Header.MsgType == "execute_request" {
-				var metadata map[string]any
-				if err := json.Unmarshal(msg.Metadata, &metadata); err == nil {
-					if cellIDStr, ok := metadata["cell_id"].(string); ok {
-						if cellID, err := uuid.Parse(cellIDStr); err == nil {
-							c.mapMutex.Lock()
-							c.msgIDCellIDMap[msg.Header.MsgID] = cellID
-							c.mapMutex.Unlock()
+			if err := json.Unmarshal(p, &msg); err == nil {
+				c.Logger.Debug().Str("msg_type", msg.Header.MsgType).Msg("Received message from frontend")
+				if msg.Header.MsgType == "execute_request" {
+					c.Logger.Debug().RawJSON("execute_request_metadata", msg.Metadata).Msg("Inspecting metadata for execute_request")
+					var metadata map[string]any
+					if err := json.Unmarshal(msg.Metadata, &metadata); err == nil {
+						if cellIDStr, ok := metadata["cell_id"].(string); ok {
+							if cellID, err := uuid.Parse(cellIDStr); err == nil {
+								c.mapMutex.Lock()
+								c.msgIDCellIDMap[msg.Header.MsgID] = cellID
+								c.mapMutex.Unlock()
+								c.Logger.Debug().Str("msg_id", msg.Header.MsgID).Str("cell_id", cellID.String()).Msg("Stored msg_id to cell_id mapping")
+							} else {
+								c.Logger.Warn().Err(err).Str("cell_id_str", cellIDStr).Msg("Failed to parse cell_id from metadata")
+							}
+						} else {
+							c.Logger.Warn().Interface("metadata", metadata).Msg("cell_id not found in execute_request metadata or is not a string")
 						}
+					} else {
+						c.Logger.Warn().Err(err).Msg("Failed to unmarshal execute_request metadata")
 					}
 				}
 			}
 
+			c.Logger.Trace().Str("direction", "FE->KG").Int("size", len(p)).Bytes("raw_message", p).Msg("proxied message")
 			if err := kgConn.WriteMessage(messageType, p); err != nil {
 				c.Logger.Warn().Err(err).Msg("error writing to kernel gateway, closing proxy")
 				return
 			}
-			c.Logger.Trace().Str("direction", "FE->KG").Int("size", len(p)).Msg("proxied message")
 		}
 	}()
 
@@ -263,11 +274,15 @@ func (c *KernelController) KernelChannelsHandler(w http.ResponseWriter, r *http.
 }
 
 func (c *KernelController) saveCellOutput(p []byte) {
+	c.Logger.Debug().RawJSON("raw_kernel_message", p).Msg("Attempting to save cell output")
+
 	var msg jupyterclient.Message
 	if err := json.Unmarshal(p, &msg); err != nil {
-		c.Logger.Debug().Err(err).Msg("failed to unmarshal jupyter message")
+		c.Logger.Error().Err(err).Msg("failed to unmarshal jupyter message")
 		return
 	}
+
+	c.Logger.Debug().Interface("parsed_message", msg).Msg("Successfully parsed Jupyter message")
 
 	outputTypes := map[string]struct{}{
 		"stream":         {},
@@ -277,6 +292,7 @@ func (c *KernelController) saveCellOutput(p []byte) {
 		"execute_reply":  {},
 	}
 	if _, ok := outputTypes[msg.Header.MsgType]; !ok {
+		c.Logger.Trace().Str("msg_type", msg.Header.MsgType).Msg("Ignoring message type for output saving")
 		return
 	}
 
@@ -288,9 +304,11 @@ func (c *KernelController) saveCellOutput(p []byte) {
 		c.Logger.Warn().Str("parent_msg_id", msg.ParentHeader.MsgID).Msg("cell_id not found for parent message")
 		return
 	}
+	c.Logger.Debug().Str("cell_id", cellID.String()).Str("parent_msg_id", msg.ParentHeader.MsgID).Msg("Found cell_id for parent message")
 
 	// Clean up the map when the execution is done
 	if msg.Header.MsgType == "execute_reply" {
+		c.Logger.Info().Str("parent_msg_id", msg.ParentHeader.MsgID).Msg("Execution reply received, cleaning up cell_id map")
 		c.mapMutex.Lock()
 		delete(c.msgIDCellIDMap, msg.ParentHeader.MsgID)
 		c.mapMutex.Unlock()
@@ -329,8 +347,12 @@ func (c *KernelController) saveCellOutput(p []byte) {
 	outputs, err := c.CellRepo.GetCellOutputsByCellID(context.Background(), cellID)
 	if err != nil {
 		c.Logger.Error().Err(err).Msg("failed to get cell outputs to determine next index")
+		// Continue anyway, index might be 0
 	}
 	outputData.OutputIndex = len(outputs)
+	
+	c.Logger.Debug().Interface("output_data", outputData).Msg("Constructed output data object")
+
 
 	if _, err := c.CellRepo.CreateCellOutput(context.Background(), &outputData); err != nil {
 		c.Logger.Error().Err(err).Msg("failed to save cell output")

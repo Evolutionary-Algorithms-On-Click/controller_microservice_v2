@@ -35,15 +35,16 @@ func (r *notebookRepository) CreateNotebook(ctx context.Context, req *models.Cre
 	now := time.Now().UTC()
 
 	query := `
-		INSERT INTO notebooks (id, title, context_minio_url, problem_statement_id, created_at, last_modified_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, title, context_minio_url, problem_statement_id, created_at, last_modified_at;
-	`
+		INSERT INTO notebooks (id, title, context_minio_url, requirements, problem_statement_id, created_at, last_modified_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, title, context_minio_url, requirements, problem_statement_id, created_at, last_modified_at;
+		`
 
 	row := r.pool.QueryRow(ctx, query,
 		id,
 		req.Title,
 		nil, // TODO: Should include logic for context minIO url
+		req.Requirements,
 		req.ProblemStatementID,
 		now,
 		now,
@@ -54,6 +55,7 @@ func (r *notebookRepository) CreateNotebook(ctx context.Context, req *models.Cre
 		&nb.ID,
 		&nb.Title,
 		&nb.ContextMinioURL,
+		&nb.Requirements,
 		&nb.ProblemStatementID,
 		&nb.CreatedAt,
 		&nb.LastModifiedAt,
@@ -65,7 +67,7 @@ func (r *notebookRepository) CreateNotebook(ctx context.Context, req *models.Cre
 }
 
 func (r *notebookRepository) ListNotebooks(ctx context.Context, filters map[string]string) ([]models.Notebook, error) {
-	query := `SELECT id, title, context_minio_url, problem_statement_id, created_at, last_modified_at FROM notebooks`
+	query := `SELECT id, title, context_minio_url, requirements, problem_statement_id, created_at, last_modified_at FROM notebooks`
 	args := []any{}
 	where := ""
 
@@ -96,6 +98,7 @@ func (r *notebookRepository) ListNotebooks(ctx context.Context, filters map[stri
 			&nb.ID,
 			&nb.Title,
 			&nb.ContextMinioURL,
+			&nb.Requirements,
 			&nb.ProblemStatementID,
 			&nb.CreatedAt,
 			&nb.LastModifiedAt,
@@ -116,7 +119,7 @@ func (r *notebookRepository) GetNotebookByID(ctx context.Context, id string) (*m
 
 	query := `
 		SELECT
-			n.id, n.title, n.context_minio_url, n.problem_statement_id, n.created_at, n.last_modified_at,
+			n.id, n.title, n.context_minio_url, n.requirements, n.problem_statement_id, n.created_at, n.last_modified_at,
 			c.id, c.notebook_id, c.cell_index, c.cell_name, c.cell_type, c.source, c.execution_count,
 			co.id, co.cell_id, co.output_index, co.type, co.data_json, co.minio_url, co.execution_count,
 			er.id, er.source_cell_id, er.start_time, er.end_time, er.status,
@@ -147,8 +150,11 @@ func (r *notebookRepository) GetNotebookByID(ctx context.Context, id string) (*m
 	defer rows.Close()
 
 	var notebook models.Notebook
+	var notebookFetched bool
 	cellMap := make(map[uuid.UUID]*models.Cell)
 	runMap := make(map[uuid.UUID]*models.EvolutionRun)
+	outputMap := make(map[uuid.UUID]bool)
+	variationMap := make(map[uuid.UUID]bool)
 	var orderedCellIDs []uuid.UUID
 
 	for rows.Next() {
@@ -182,13 +188,17 @@ func (r *notebookRepository) GetNotebookByID(ctx context.Context, id string) (*m
 		)
 
 		if err := rows.Scan(
-			&notebook.ID, &notebook.Title, &notebook.ContextMinioURL, &notebook.ProblemStatementID, &notebook.CreatedAt, &notebook.LastModifiedAt,
+			&notebook.ID, &notebook.Title, &notebook.ContextMinioURL, &notebook.Requirements, &notebook.ProblemStatementID, &notebook.CreatedAt, &notebook.LastModifiedAt,
 			&cellID, &cellNotebookID, &cellIndex, &cellName, &cellType, &cellSource, &cellExecCount,
 			&outputID, &outputCellID, &outputIndex, &outputType, &outputDataJSON, &outputMinioURL, &outputExecCount,
 			&erID, &erSourceCellID, &erStartTime, &erEndTime, &erStatus,
 			&cvID, &cvEvolutionRunID, &cvCode, &cvMetric, &cvIsBest, &cvGeneration, &cvParentVariantID,
 		); err != nil {
 			return nil, err
+		}
+
+		if !notebookFetched {
+			notebookFetched = true
 		}
 
 		if cellID.Valid {
@@ -208,7 +218,7 @@ func (r *notebookRepository) GetNotebookByID(ctx context.Context, id string) (*m
 			}
 		}
 
-		if outputID.Valid {
+		if outputID.Valid && !outputMap[outputID.UUID] {
 			if cell, exists := cellMap[outputCellID.UUID]; exists {
 				cell.Outputs = append(cell.Outputs, models.CellOutput{
 					ID:             outputID.UUID,
@@ -219,6 +229,7 @@ func (r *notebookRepository) GetNotebookByID(ctx context.Context, id string) (*m
 					MinioURL:       outputMinioURL.String,
 					ExecutionCount: int(outputExecCount.Int32),
 				})
+				outputMap[outputID.UUID] = true
 			}
 		}
 
@@ -238,7 +249,7 @@ func (r *notebookRepository) GetNotebookByID(ctx context.Context, id string) (*m
 			}
 		}
 
-		if cvID.Valid {
+		if cvID.Valid && !variationMap[cvID.UUID] {
 			if run, exists := runMap[cvEvolutionRunID.UUID]; exists {
 				variation := models.CellVariation{
 					ID:             cvID.UUID,
@@ -252,11 +263,12 @@ func (r *notebookRepository) GetNotebookByID(ctx context.Context, id string) (*m
 					variation.ParentVariantID = &cvParentVariantID.UUID
 				}
 				run.Variations = append(run.Variations, variation)
+				variationMap[cvID.UUID] = true
 			}
 		}
 	}
 
-	if notebook.ID == "" {
+	if !notebookFetched {
 		return nil, errors.New("notebook not found")
 	}
 
@@ -284,6 +296,14 @@ func (r *notebookRepository) UpdateNotebook(ctx context.Context, id string, req 
 		args = append(args, *req.Title)
 		argIndex++
 	}
+	if req.Requirements != nil {
+		if setClause != "" {
+			setClause += ", "
+		}
+		setClause += "requirements = $" + strconv.Itoa(argIndex)
+		args = append(args, *req.Requirements)
+		argIndex++
+	}
 
 	if setClause == "" {
 		return r.GetNotebookByID(ctx, id)
@@ -299,7 +319,7 @@ func (r *notebookRepository) UpdateNotebook(ctx context.Context, id string, req 
 		UPDATE notebooks
 		SET ` + setClause + `
 		WHERE id = $` + strconv.Itoa(argIndex) + `
-		RETURNING id, title, context_minio_url, problem_statement_id, created_at, last_modified_at;
+		RETURNING id, title, context_minio_url, requirements, problem_statement_id, created_at, last_modified_at;
 	`
 
 	row := r.pool.QueryRow(ctx, query, args...)
@@ -309,6 +329,7 @@ func (r *notebookRepository) UpdateNotebook(ctx context.Context, id string, req 
 		&nb.ID,
 		&nb.Title,
 		&nb.ContextMinioURL,
+		&nb.Requirements,
 		&nb.ProblemStatementID,
 		&nb.CreatedAt,
 		&nb.LastModifiedAt,

@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS notebooks (
   title TEXT NOT NULL,
   context_minio_url TEXT,
   problem_statement_id UUID REFERENCES problem_statements(id) ON DELETE CASCADE,
+  requirements TEXT,
   created_at TIMESTAMPTZ NOT NULL,
   last_modified_at TIMESTAMPTZ NOT NULL
 );

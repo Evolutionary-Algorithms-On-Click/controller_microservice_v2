@@ -54,6 +54,7 @@ type UpdateCellsRequest struct {
 	UpdatedOrder  []StringUUID                  `json:"updated_order"`
 	CellsToDelete []StringUUID                  `json:"cells_to_delete"`
 	CellsToUpsert map[string]CellDataForUpsert `json:"cells_to_upsert"`
+	Requirements  *string                       `json:"requirements,omitempty"`
 }
 
 // CellDataForUpsert represents the data for a cell to be upserted.
