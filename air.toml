@@ -1,0 +1,37 @@
+# .air.toml
+# Final configuration, explicitly using .exe for Windows.
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  # Explicitly build the .exe file on Windows.
+  cmd = "go build -o build/go-service.exe ./cmd/main.go"
+
+  # The binary to run, now with the correct .exe extension.
+  bin = "build/go-service.exe"
+  
+  # Exclude directories to prevent loops and unnecessary watching.
+  exclude_dir = ["tmp", "build", "vendor", "test", "scripts", "docker", ".git", "docs"]
+  include_ext = ["go", "toml", "yaml"]
+  exclude_regex = ["_test.go"]
+  
+  # Standard settings.
+  delay = 1000
+  stop_on_error = true
+  log = "air-build-errors.log"
+
+[color]
+  build = "yellow"
+  main = "magenta"
+  runner = "green"
+  watcher = "cyan"
+
+[log]
+  time = true
+
+[misc]
+  clean_on_exit = false
+
+[screen]
+  clear_on_rebuild = true
