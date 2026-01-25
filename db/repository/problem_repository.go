@@ -6,6 +6,7 @@ import (
 
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg/models"
 	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/rs/zerolog"
 )
 
 // ProblemRepository defines the interface for database operations on problem statements.
@@ -15,16 +16,24 @@ type ProblemRepository interface {
 	GetProblemsByUserID(ctx context.Context, userID string) ([]models.ProblemStatement, error)
 	UpdateProblem(ctx context.Context, problemID string, title string, description json.RawMessage) (*models.ProblemStatement, error)
 	DeleteProblem(ctx context.Context, problemID string) error
+	WithLogger(logger zerolog.Logger) ProblemRepository // Add WithLogger method
 }
 
 // problemRepository is the concrete implementation of ProblemRepository.
 type problemRepository struct {
-	db *pgxpool.Pool
+	db     *pgxpool.Pool
+	logger zerolog.Logger // Add logger field
 }
 
 // NewProblemRepository creates a new ProblemRepository.
 func NewProblemRepository(db *pgxpool.Pool) ProblemRepository {
 	return &problemRepository{db: db}
+}
+
+// WithLogger allows setting the logger for the repository.
+func (r *problemRepository) WithLogger(logger zerolog.Logger) ProblemRepository {
+	r.logger = logger
+	return r
 }
 
 // CreateProblem inserts a new problem statement into the database.
@@ -50,6 +59,10 @@ func (r *problemRepository) CreateProblem(ctx context.Context, problem *models.P
 		&createdProblem.CreatedBy,
 		&createdProblem.CreatedAt,
 	); err != nil {
+		r.logger.Error().Err(err).
+			Str("problemID", problem.ID.String()).
+			Str("title", problem.Title).
+			Msg("failed to create problem or scan created problem")
 		return nil, err
 	}
 
@@ -73,6 +86,7 @@ func (r *problemRepository) GetProblemByID(ctx context.Context, problemID string
 		&problem.CreatedBy,
 		&problem.CreatedAt,
 	); err != nil {
+		r.logger.Error().Err(err).Str("problemID", problemID).Msg("failed to get problem by ID or scan row")
 		return nil, err
 	}
 
@@ -88,6 +102,7 @@ func (r *problemRepository) GetProblemsByUserID(ctx context.Context, userID stri
 	`
 	rows, err := r.db.Query(ctx, query, userID)
 	if err != nil {
+		r.logger.Error().Err(err).Str("userID", userID).Msg("failed to query problems by user ID")
 		return nil, err
 	}
 	defer rows.Close()
@@ -102,9 +117,15 @@ func (r *problemRepository) GetProblemsByUserID(ctx context.Context, userID stri
 			&problem.CreatedBy,
 			&problem.CreatedAt,
 		); err != nil {
+			r.logger.Error().Err(err).Str("userID", userID).Msg("failed to scan problem row by user ID")
 			return nil, err
 		}
 		problems = append(problems, problem)
+	}
+
+	if err := rows.Err(); err != nil {
+		r.logger.Error().Err(err).Str("userID", userID).Msg("error after iterating through problem rows by user ID")
+		return nil, err
 	}
 
 	return problems, nil
@@ -128,6 +149,7 @@ func (r *problemRepository) UpdateProblem(ctx context.Context, problemID string,
 		&updatedProblem.CreatedBy,
 		&updatedProblem.CreatedAt,
 	); err != nil {
+		r.logger.Error().Err(err).Str("problemID", problemID).Msg("failed to update problem or scan updated problem")
 		return nil, err
 	}
 
@@ -138,5 +160,8 @@ func (r *problemRepository) UpdateProblem(ctx context.Context, problemID string,
 func (r *problemRepository) DeleteProblem(ctx context.Context, problemID string) error {
 	query := `DELETE FROM problem_statements WHERE id = $1;`
 	_, err := r.db.Exec(ctx, query, problemID)
+	if err != nil {
+		r.logger.Error().Err(err).Str("problemID", problemID).Msg("failed to delete problem")
+	}
 	return err
 }

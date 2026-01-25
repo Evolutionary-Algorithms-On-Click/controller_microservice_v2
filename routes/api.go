@@ -20,7 +20,7 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) {
 	notebookRepo := repository.NewNotebookRepository(db.Pool)
 	llmRepo := repository.NewLlmProxy(os.Getenv("LLM_MICROSERVICE_URL"))
 	sessionRepo := repository.NewSessionRepository(db.Pool)
-	problemRepo := repository.NewProblemRepository(db.Pool)
+	problemRepo := repository.NewProblemRepository(db.Pool).WithLogger(*pkg.Logger)
 	cellRepo := repository.NewCellRepository(db.Pool, *pkg.Logger)
 
 	// Initialize Modules
