@@ -52,7 +52,11 @@ func main() {
 	}
 
 	// Initialize Logger
-	logger, err := pkg.NewLogger(os.Getenv("APP_ENV"))
+	logLevel := os.Getenv("LOG_LEVEL")
+	if logLevel == "" {
+		logLevel = "info" // Default to info if not set
+	}
+	logger, err := pkg.NewLogger(os.Getenv("APP_ENV"), logLevel)
 	if err != nil {
 		log.Printf("[CRASH]: Logger initialization failed: %v", err)
 		return

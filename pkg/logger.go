@@ -5,33 +5,46 @@ import (
 	"github.com/rs/zerolog"
 	"io"
 	"os"
+	"strings"
 	"time"
 )
 
 var Logger *zerolog.Logger
 
-func NewLogger(env string) (zerolog.Logger, error) {
+func NewLogger(env string, logLevel string) (zerolog.Logger, error) {
 	var output io.Writer
 
 	switch env {
 	case "DEVELOPMENT":
-		// Use a human-readable console writer for development
 		output = zerolog.ConsoleWriter{
 			Out:        os.Stderr,
 			TimeFormat: time.RFC3339,
 		}
 	case "PRODUCTION":
-		// Use JSON output for production, which is machine-readable
-		// and can be easily consumed by log aggregation systems.
-		file, err := os.OpenFile("prod.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
-		if err != nil {
-			return zerolog.Logger{}, err
-		}
-		output = file
+		output = os.Stderr // For production, output to stderr by default. Consider file or other sink for actual deployments.
 	default:
 		return zerolog.Logger{}, fmt.Errorf("invalid environment for logger setup: %s (Allowed: DEVELOPMENT, PRODUCTION)", env)
 	}
 
 	logger := zerolog.New(output).With().Timestamp().Logger()
+
+	// Set global log level
+	switch strings.ToLower(logLevel) {
+	case "debug":
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	case "info":
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	case "warn":
+		zerolog.SetGlobalLevel(zerolog.WarnLevel)
+	case "error":
+		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
+	case "fatal":
+		zerolog.SetGlobalLevel(zerolog.FatalLevel)
+	case "panic":
+		zerolog.SetGlobalLevel(zerolog.PanicLevel)
+	default:
+		zerolog.SetGlobalLevel(zerolog.InfoLevel) // Default to info level
+	}
+
 	return logger, nil
 }
