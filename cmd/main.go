@@ -149,7 +149,14 @@ func main() {
 	loggedMux := middleware.RequestLogger(mux)
 
 	corsHandler := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:5173"},
+		AllowedOrigins:   []string{
+			"http://localhost:3000", 
+			"http://localhost:5173", 
+			"http://172.17.9.12:3001",
+			"https://172.17.9.12:3001",
+			"http://172.17.9.12:3000",
+			"https://172.17.9.12:3000",
+			},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowedHeaders:   []string{"*"},
 		AllowCredentials: true,
