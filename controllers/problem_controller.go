@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -70,18 +71,19 @@ func (c *ProblemController) CreateProblemHandler(w http.ResponseWriter, r *http.
 
 // ListProblemsHandler handles GET /api/v1/problems
 func (c *ProblemController) ListProblemsHandler(w http.ResponseWriter, r *http.Request) {
-	c.Logger.Info().Msg("received request to list problems")
+	log.Printf("received request to list problems")
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
 	user, ok := ctx.Value(middleware.UserContextKey).(*middleware.User)
 	if !ok {
-		c.Logger.Error().Msg("user not found in context for listing problems")
+		log.Printf("user not found in context for listing problems")
 		http.Error(w, "user not found in context", http.StatusUnauthorized)
 		return
 	}
 	c.Logger.Info().Str("userID", user.ID).Msg("user authorized for listing problems")
+	log.Printf("Listing problems for user ID: %s", user.ID)
 
 	problems, err := c.ProblemModule.GetProblemsByUserID(ctx, user.ID)
 	if err != nil {
