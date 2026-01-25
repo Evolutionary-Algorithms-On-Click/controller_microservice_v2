@@ -24,7 +24,7 @@ func NewLlmModule(repo repository.LlmRepository) *LlmModule {
 }
 
 // GenerateNotebook validates and proxies the generate request.
-func (m *LlmModule) GenerateNotebook(ctx context.Context, body io.Reader) (*http.Response, error) {
+func (m *LlmModule) GenerateNotebook(ctx context.Context, body io.Reader, userID string) (*http.Response, error) {
 	bodyBytes, err := io.ReadAll(body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read request body: %w", err)
@@ -35,9 +35,11 @@ func (m *LlmModule) GenerateNotebook(ctx context.Context, body io.Reader) (*http
 		return nil, fmt.Errorf("failed to decode request body as JSON: %w", err)
 	}
 
-	if err := IsUserIDandNotebookIDPresent(requestData); err != nil {
+	if err := IsNotebookIDPresent(requestData); err != nil {
 		return nil, err
 	}
+
+	requestData["user_id"] = userID
 
 	finalBodyBytes, err := json.Marshal(requestData)
 	if err != nil {
@@ -48,7 +50,7 @@ func (m *LlmModule) GenerateNotebook(ctx context.Context, body io.Reader) (*http
 }
 
 // ModifyNotebook validates and proxies the modify request.
-func (m *LlmModule) ModifyNotebook(ctx context.Context, sessionID string, body io.Reader) (*http.Response, error) {
+func (m *LlmModule) ModifyNotebook(ctx context.Context, sessionID string, body io.Reader, userID string) (*http.Response, error) {
 	bodyBytes, err := io.ReadAll(body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read request body: %w", err)
@@ -59,9 +61,11 @@ func (m *LlmModule) ModifyNotebook(ctx context.Context, sessionID string, body i
 		return nil, fmt.Errorf("failed to decode request body as JSON: %w", err)
 	}
 
-	if err := IsUserIDandNotebookIDPresent(requestData); err != nil {
+	if err := IsNotebookIDPresent(requestData); err != nil {
 		return nil, err
 	}
+
+	requestData["user_id"] = userID
 
 	if instruction, ok := requestData["instruction"].(string); !ok || instruction == "" {
 		return nil, fmt.Errorf("request body must contain a non-empty 'instruction' string")
@@ -75,11 +79,16 @@ func (m *LlmModule) ModifyNotebook(ctx context.Context, sessionID string, body i
 		return nil, fmt.Errorf("'notebook' object must contain a 'cells' array")
 	}
 
-	return m.Repo.ModifyNotebook(ctx, bytes.NewBuffer(bodyBytes))
+	finalBodyBytes, err := json.Marshal(requestData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to re-encode request body: %w", err)
+	}
+
+	return m.Repo.ModifyNotebook(ctx, bytes.NewBuffer(finalBodyBytes))
 }
 
 // FixNotebook validates and proxies the fix request.
-func (m *LlmModule) FixNotebook(ctx context.Context, sessionID string, body io.Reader) (*http.Response, error) {
+func (m *LlmModule) FixNotebook(ctx context.Context, sessionID string, body io.Reader, userID string) (*http.Response, error) {
 	bodyBytes, err := io.ReadAll(body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read request body: %w", err)
@@ -90,9 +99,11 @@ func (m *LlmModule) FixNotebook(ctx context.Context, sessionID string, body io.R
 		return nil, fmt.Errorf("failed to decode request body as JSON: %w", err)
 	}
 
-	if err := IsUserIDandNotebookIDPresent(requestData); err != nil {
+	if err := IsNotebookIDPresent(requestData); err != nil {
 		return nil, err
 	}
+
+	requestData["user_id"] = userID
 
 	if traceback, ok := requestData["traceback"].(string); !ok || traceback == "" {
 		return nil, fmt.Errorf("request body must contain a non-empty 'traceback' string")
@@ -106,26 +117,22 @@ func (m *LlmModule) FixNotebook(ctx context.Context, sessionID string, body io.R
 		return nil, fmt.Errorf("'notebook' object must contain a 'cells' array")
 	}
 
-	return m.Repo.FixNotebook(ctx, bytes.NewBuffer(bodyBytes))
+	finalBodyBytes, err := json.Marshal(requestData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to re-encode request body: %w", err)
+	}
+
+	return m.Repo.FixNotebook(ctx, bytes.NewBuffer(finalBodyBytes))
 }
 
-func IsUserIDandNotebookIDPresent(requestData map[string]any) error {
-	// TODO: User ID should not be passed in the body.
-	// TODO: It should be extracted from the auth context, which i am not going to do now :)
-	// making sure user_id and notebook_id are present
-	if _, hasUserID := requestData["user_id"]; !hasUserID {
-		return fmt.Errorf("request body must contain 'user_id'")
-	}
+func IsNotebookIDPresent(requestData map[string]any) error {
+	// making sure notebook_id is present
 	if _, hasNotebookID := requestData["notebook_id"]; !hasNotebookID {
 		return fmt.Errorf("request body must contain 'notebook_id'")
 	}
 	notebookIDStr, isString := requestData["notebook_id"].(string)
 	if !isString || notebookIDStr == "" {
 		return fmt.Errorf("'notebook_id' must be a non-empty string")
-	}
-	userIDStr, isString := requestData["user_id"].(string)
-	if !isString || userIDStr == "" {
-		return fmt.Errorf("'user_id' must be a non-empty string")
 	}
 	return nil
 }

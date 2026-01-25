@@ -1,13 +1,12 @@
 syntax = "proto3";
 
 package proto;
-
-option go_package = "github.com/Thanus-Kumaar/controller_microservice_v2/proto";
+option go_package = "/proto";
 
 // Authenticate service provides the Authenticate method.
 service Authenticate {
     // Authenticate validates the token and returns the user information.
-    rpc Auth(TokenValidateRequest) returns (TokenValidateResponse) {}
+    rpc Auth(TokenValidateRequest) returns (TokenValidateResponse) {};
 }
 
 // TokenValidateRequest is the request message for the Authenticate method.

@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.2.0
 // - protoc             v6.33.1
-// source: proto/authenticate.proto
+// source: controller_microservice_v2/proto/authenticate.proto
 
 package proto
 
@@ -103,5 +103,5 @@ var Authenticate_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/authenticate.proto",
+	Metadata: "controller_microservice_v2/proto/authenticate.proto",
 }

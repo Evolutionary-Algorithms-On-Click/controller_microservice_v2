@@ -7,6 +7,7 @@ import (
 	"github.com/Thanus-Kumaar/controller_microservice_v2/controllers"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/db"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/db/repository"
+	"github.com/Thanus-Kumaar/controller_microservice_v2/middleware"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/modules"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg"
 	jupyterclient "github.com/Thanus-Kumaar/controller_microservice_v2/pkg/jupyter_client"
@@ -40,11 +41,11 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) {
 	// Register the handler functions with API versioning (v1)
 
 	// Problem Routes
-	mux.HandleFunc("POST /api/v1/problems", problemController.CreateProblemHandler)
-	mux.HandleFunc("GET /api/v1/problems", problemController.ListProblemsHandler)
-	mux.HandleFunc("GET /api/v1/problems/{id}", problemController.GetProblemByIDHandler)
-	mux.HandleFunc("PUT /api/v1/problems/{id}", problemController.UpdateProblemByIDHandler)
-	mux.HandleFunc("DELETE /api/v1/problems/{id}", problemController.DeleteProblemByIDHandler)
+	mux.Handle("POST /api/v1/problems", middleware.AuthMiddleware(http.HandlerFunc(problemController.CreateProblemHandler)))
+	mux.Handle("GET /api/v1/problems", middleware.AuthMiddleware(http.HandlerFunc(problemController.ListProblemsHandler)))
+	mux.Handle("GET /api/v1/problems/{id}", middleware.AuthMiddleware(http.HandlerFunc(problemController.GetProblemByIDHandler)))
+	mux.Handle("PUT /api/v1/problems/{id}", middleware.AuthMiddleware(http.HandlerFunc(problemController.UpdateProblemByIDHandler)))
+	mux.Handle("DELETE /api/v1/problems/{id}", middleware.AuthMiddleware(http.HandlerFunc(problemController.DeleteProblemByIDHandler)))
 
 	// Notebook Routes
 	mux.HandleFunc("POST /api/v1/notebooks", notebookController.CreateNotebookHandler)
@@ -75,9 +76,9 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) {
 	mux.HandleFunc("DELETE /api/v1/outputs/{output_id}", cellController.DeleteCellOutputHandler)
 
 	// Llm Routes
-	mux.HandleFunc("POST /api/v1/llm/generate", llmController.GenerateNotebookHandler)
-	mux.HandleFunc("POST /api/v1/llm/modify", llmController.ModifyNotebookHandler)
-	mux.HandleFunc("POST /api/v1/llm/fix", llmController.FixNotebookHandler)
+	mux.Handle("POST /api/v1/llm/generate", middleware.AuthMiddleware(http.HandlerFunc(llmController.GenerateNotebookHandler)))
+	mux.Handle("POST /api/v1/llm/modify", middleware.AuthMiddleware(http.HandlerFunc(llmController.ModifyNotebookHandler)))
+	mux.Handle("POST /api/v1/llm/fix", middleware.AuthMiddleware(http.HandlerFunc(llmController.FixNotebookHandler)))
 
 	// Kernel Routes
 	mux.HandleFunc("POST /api/v1/kernels", kernelController.StartKernelHandler)

@@ -52,8 +52,23 @@ func (c *NotebookController) ListNotebooksHandler(w http.ResponseWriter, r *http
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	// TODO: parse limit/offset/created_by/problem_statement_id from r.URL.Query()
-	nbs, err := c.NotebookModule.ListNotebooks(ctx, nil)
+	filters := make(map[string]string)
+	query := r.URL.Query()
+
+	if createdBy := query.Get("created_by"); createdBy != "" {
+		filters["created_by"] = createdBy
+	}
+	if problemStatementID := query.Get("problem_statement_id"); problemStatementID != "" {
+		filters["problem_statement_id"] = problemStatementID
+	}
+	if limit := query.Get("limit"); limit != "" {
+		filters["limit"] = limit
+	}
+	if offset := query.Get("offset"); offset != "" {
+		filters["offset"] = offset
+	}
+
+	nbs, err := c.NotebookModule.ListNotebooks(ctx, filters)
 	if err != nil {
 		c.Logger.Error().Err(err).Msg("failed to list notebooks")
 		http.Error(w, "error listing notebooks", http.StatusInternalServerError)

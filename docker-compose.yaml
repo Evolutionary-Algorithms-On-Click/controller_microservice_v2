@@ -15,7 +15,7 @@ services:
       JUPYTER_AUTH_TOKEN: "YOUR_SECRET_TOKEN"
       CULL_INTERVAL_MINUTES: 10
       IDLE_THRESHOLD_MINUTES: 30
-      AUTH_GRPC_SERVER_ADDRESS: "localhost:5001"
+      AUTH_GRPC_ADDRESS: "localhost:5001"
       LLM_MICROSERVICE_URL: "http://host.docker.internal:8000"
     networks:
       - evoc-net

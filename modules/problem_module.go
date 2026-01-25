@@ -26,8 +26,6 @@ func (m *ProblemModule) CreateProblem(ctx context.Context, problem *models.Creat
 		return nil, errors.New("invalid problem creation request")
 	}
 
-	// TODO: The createdBy string should be a valid UUID.
-	// We should probably parse it here. For now, we'll assume it's valid.
 	creatorID, err := uuid.Parse(createdBy)
 	if err != nil {
 		// If createdBy is an empty string or not a valid UUID, handle it.
