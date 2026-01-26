@@ -3,6 +3,7 @@ package modules
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/Thanus-Kumaar/controller_microservice_v2/db/repository"
@@ -14,17 +15,19 @@ import (
 
 // SessionModule encapsulates the business logic for sessions.
 type SessionModule struct {
-	Repo    repository.SessionRepository
-	Jupyter *jupyterclient.Client
-	Logger  zerolog.Logger
+	Repo         repository.SessionRepository
+	Jupyter      *jupyterclient.Client
+	Logger       zerolog.Logger
+	NotebookRepo repository.NotebookRepository // Added NotebookRepo
 }
 
 // NewSessionModule creates and returns a new SessionModule.
-func NewSessionModule(repo repository.SessionRepository, jupyter *jupyterclient.Client, logger zerolog.Logger) *SessionModule {
+func NewSessionModule(repo repository.SessionRepository, jupyter *jupyterclient.Client, logger zerolog.Logger, notebookRepo repository.NotebookRepository) *SessionModule {
 	return &SessionModule{
-		Repo:    repo,
-		Jupyter: jupyter,
-		Logger:  logger,
+		Repo:         repo,
+		Jupyter:      jupyter,
+		Logger:       logger,
+		NotebookRepo: notebookRepo,
 	}
 }
 
@@ -42,6 +45,15 @@ func (m *SessionModule) CreateSession(ctx context.Context, userIDStr string, not
 	notebookID, err := uuid.Parse(notebookIDStr)
 	if err != nil {
 		return nil, errors.New("invalid notebook_id format")
+	}
+
+	// Verify that the user owns the notebook
+	notebook, err := m.NotebookRepo.GetNotebookByID(ctx, notebookIDStr, userIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve notebook for ownership verification: %w", err)
+	}
+	if notebook == nil || notebook.ID == "" {
+		return nil, errors.New("notebook not found or not owned by user")
 	}
 
 	// TODO: Should check if the language is supported by the jupyter kernelspecs

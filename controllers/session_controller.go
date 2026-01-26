@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Thanus-Kumaar/controller_microservice_v2/middleware"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/modules"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg" // Added pkg import
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg/models"
@@ -32,13 +33,12 @@ func (c *SessionController) CreateSessionHandler(w http.ResponseWriter, r *http.
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second) // Increased timeout for kernel start
 	defer cancel()
 
-	// userID, ok := r.Context().Value("userID").(string)
-	// if !ok || userID == "" {
-	// 	c.Logger.Error().Msg("userID not found in context after authentication")
-	// 	http.Error(w, "Unauthorized", http.StatusUnauthorized)
-	// 	return
-	// }
-	userID := "123e4567-e89b-12d3-a456-426614174000" // Hardcoded for testing
+	user, ok := ctx.Value(middleware.UserContextKey).(*middleware.User)
+	if !ok || user.ID == "" {
+		c.Logger.Error().Msg("userID not found in context for session creation")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	var req models.CreateSessionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -46,7 +46,7 @@ func (c *SessionController) CreateSessionHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	session, err := c.Module.CreateSession(ctx, userID, req.NotebookID, req.Language)
+	session, err := c.Module.CreateSession(ctx, user.ID, req.NotebookID, req.Language)
 	if err != nil {
 		c.Logger.Error().Err(err).Msg("failed to create session")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -55,19 +55,19 @@ func (c *SessionController) CreateSessionHandler(w http.ResponseWriter, r *http.
 
 	pkg.WriteJSONResponseWithLogger(w, http.StatusCreated, session, &c.Logger)
 }
+
 // ListSessionsHandler handles GET /api/v1/sessions
 func (c *SessionController) ListSessionsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	// userID, ok := r.Context().Value("userID").(string)
-	// if !ok || userID == "" {
-	// 	http.Error(w, "Unauthorized", http.StatusUnauthorized)
-	// 	return
-	// }
-	userIDStr := "123e4567-e89b-12d3-a456-426614174000" // Hardcoded for testing
+	user, ok := ctx.Value(middleware.UserContextKey).(*middleware.User)
+	if !ok || user.ID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-	userID, err := uuid.Parse(userIDStr)
+	userID, err := uuid.Parse(user.ID)
 	if err != nil {
 		http.Error(w, "invalid user ID format", http.StatusBadRequest)
 		return
@@ -95,14 +95,13 @@ func (c *SessionController) GetSessionByIDHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	// userID, ok := r.Context().Value("userID").(string)
-	// if !ok || userID == "" {
-	// 	http.Error(w, "Unauthorized", http.StatusUnauthorized)
-	// 	return
-	// }
-	userIDStr := "123e4567-e89b-12d3-a456-426614174000" // Hardcoded for testing
+	user, ok := ctx.Value(middleware.UserContextKey).(*middleware.User)
+	if !ok || user.ID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-	userID, err := uuid.Parse(userIDStr)
+	userID, err := uuid.Parse(user.ID)
 	if err != nil {
 		http.Error(w, "invalid user ID format", http.StatusBadRequest)
 		return
@@ -131,14 +130,13 @@ func (c *SessionController) UpdateSessionByIDHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	// userID, ok := r.Context().Value("userID").(string)
-	// if !ok || userID == "" {
-	// 	http.Error(w, "Unauthorized", http.StatusUnauthorized)
-	// 	return
-	// }
-	userIDStr := "123e4567-e89b-12d3-a456-426614174000" // Hardcoded for testing
+	user, ok := ctx.Value(middleware.UserContextKey).(*middleware.User)
+	if !ok || user.ID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-	userID, err := uuid.Parse(userIDStr)
+	userID, err := uuid.Parse(user.ID)
 	if err != nil {
 		http.Error(w, "invalid user ID format", http.StatusBadRequest)
 		return
@@ -176,14 +174,13 @@ func (c *SessionController) DeleteSessionByIDHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	// userID, ok := r.Context().Value("userID").(string)
-	// if !ok || userID == "" {
-	// 	http.Error(w, "Unauthorized", http.StatusUnauthorized)
-	// 	return
-	// }
-	userIDStr := "123e4567-e89b-12d3-a456-426614174000" // Hardcoded for testing
+	user, ok := ctx.Value(middleware.UserContextKey).(*middleware.User)
+	if !ok || user.ID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-	userID, err := uuid.Parse(userIDStr)
+	userID, err := uuid.Parse(user.ID)
 	if err != nil {
 		http.Error(w, "invalid user ID format", http.StatusBadRequest)
 		return

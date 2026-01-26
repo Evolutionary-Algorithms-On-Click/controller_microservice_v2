@@ -40,37 +40,42 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) {
 	// Register the handler functions with API versioning (v1)
 
 	// Problem Routes
-	mux.Handle("POST /api/v1/problems", 
+	mux.Handle("POST /api/v1/problems",
 		middleware.AuthMiddleware(http.HandlerFunc(problemController.CreateProblemHandler)))
-	mux.Handle("GET /api/v1/problems", 
+	mux.Handle("GET /api/v1/problems",
 		middleware.AuthMiddleware(http.HandlerFunc(problemController.ListProblemsHandler)))
-	mux.Handle("GET /api/v1/problems/{id}", 
+	mux.Handle("GET /api/v1/problems/{id}",
 		middleware.AuthMiddleware(http.HandlerFunc(problemController.GetProblemByIDHandler)))
-	mux.Handle("PUT /api/v1/problems/{id}", 
+	mux.Handle("PUT /api/v1/problems/{id}",
 		middleware.AuthMiddleware(http.HandlerFunc(problemController.UpdateProblemByIDHandler)))
-	mux.Handle("DELETE /api/v1/problems/{id}", 
+	mux.Handle("DELETE /api/v1/problems/{id}",
 		middleware.AuthMiddleware(http.HandlerFunc(problemController.DeleteProblemByIDHandler)))
 
 	// Notebook Routes
-	mux.Handle("POST /api/v1/notebooks", 
+	mux.Handle("POST /api/v1/notebooks",
 		middleware.AuthMiddleware(http.HandlerFunc(notebookController.CreateNotebookHandler)))
-	mux.Handle("GET /api/v1/notebooks", 
+	mux.Handle("GET /api/v1/notebooks",
 		middleware.AuthMiddleware(http.HandlerFunc(notebookController.ListNotebooksHandler)))
-	mux.Handle("GET /api/v1/notebooks/{id}", 
+	mux.Handle("GET /api/v1/notebooks/{id}",
 		middleware.AuthMiddleware(http.HandlerFunc(notebookController.GetNotebookByIDHandler)))
-	mux.Handle("PUT /api/v1/notebooks/{id}", 
+	mux.Handle("PUT /api/v1/notebooks/{id}",
 		middleware.AuthMiddleware(http.HandlerFunc(notebookController.UpdateNotebookByIDHandler)))
-	mux.Handle("DELETE /api/v1/notebooks/{id}", 
+	mux.Handle("DELETE /api/v1/notebooks/{id}",
 		middleware.AuthMiddleware(http.HandlerFunc(notebookController.DeleteNotebookByIDHandler)))
-	mux.Handle("PATCH /api/v1/notebooks/{notebook_id}/cells", 
+	mux.Handle("PATCH /api/v1/notebooks/{notebook_id}/cells",
 		middleware.AuthMiddleware(http.HandlerFunc(cellController.UpdateCellsHandler)))
 
 	// Session Routes
-	mux.Handle("POST /api/v1/sessions", middleware.AuthMiddleware(http.HandlerFunc(sessionController.CreateSessionHandler)))
-	mux.Handle("GET /api/v1/sessions", middleware.AuthMiddleware(http.HandlerFunc(sessionController.ListSessionsHandler)))
-	mux.Handle("GET /api/v1/sessions/{id}", middleware.AuthMiddleware(http.HandlerFunc(sessionController.GetSessionByIDHandler)))
-	mux.Handle("PUT /api/v1/sessions/{id}", middleware.AuthMiddleware(http.HandlerFunc(sessionController.UpdateSessionByIDHandler)))
-	mux.Handle("DELETE /api/v1/sessions/{id}", middleware.AuthMiddleware(http.HandlerFunc(sessionController.DeleteSessionByIDHandler)))
+	mux.Handle("POST /api/v1/sessions",
+		middleware.AuthMiddleware(http.HandlerFunc(sessionController.CreateSessionHandler)))
+	mux.Handle("GET /api/v1/sessions",
+		middleware.AuthMiddleware(http.HandlerFunc(sessionController.ListSessionsHandler)))
+	mux.Handle("GET /api/v1/sessions/{id}",
+		middleware.AuthMiddleware(http.HandlerFunc(sessionController.GetSessionByIDHandler)))
+	mux.Handle("PUT /api/v1/sessions/{id}",
+		middleware.AuthMiddleware(http.HandlerFunc(sessionController.UpdateSessionByIDHandler)))
+	mux.Handle("DELETE /api/v1/sessions/{id}",
+		middleware.AuthMiddleware(http.HandlerFunc(sessionController.DeleteSessionByIDHandler)))
 
 	// Cell Routes
 	mux.HandleFunc("POST /api/v1/notebooks/{notebook_id}/cells", cellController.CreateCellHandler)
@@ -85,11 +90,11 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) {
 	mux.HandleFunc("DELETE /api/v1/outputs/{output_id}", cellController.DeleteCellOutputHandler)
 
 	// Llm Routes
-	mux.Handle("POST /api/v1/llm/generate", 
+	mux.Handle("POST /api/v1/llm/generate",
 		middleware.AuthMiddleware(http.HandlerFunc(llmController.GenerateNotebookHandler)))
-	mux.Handle("POST /api/v1/llm/modify", 
+	mux.Handle("POST /api/v1/llm/modify",
 		middleware.AuthMiddleware(http.HandlerFunc(llmController.ModifyNotebookHandler)))
-	mux.Handle("POST /api/v1/llm/fix", 
+	mux.Handle("POST /api/v1/llm/fix",
 		middleware.AuthMiddleware(http.HandlerFunc(llmController.FixNotebookHandler)))
 
 	// Kernel Routes
