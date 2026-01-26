@@ -34,7 +34,7 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) {
 	sessionController := controllers.NewSessionController(sessionModule, *pkg.Logger)
 	llmController := controllers.NewLlmController(llmModule, *pkg.Logger)
 	problemController := controllers.NewProblemController(problemModule, *pkg.Logger)
-	cellController := controllers.NewCellController(cellModule, *pkg.Logger)
+	cellController := controllers.NewCellController(cellModule, *pkg.Logger, notebookModule)
 	kernelController := controllers.NewKernelController(c, *pkg.Logger, cellRepo)
 
 	// Register the handler functions with API versioning (v1)
@@ -78,16 +78,24 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) {
 		middleware.AuthMiddleware(http.HandlerFunc(sessionController.DeleteSessionByIDHandler)))
 
 	// Cell Routes
-	mux.HandleFunc("POST /api/v1/notebooks/{notebook_id}/cells", cellController.CreateCellHandler)
-	mux.HandleFunc("GET /api/v1/notebooks/{notebook_id}/cells", cellController.GetCellsByNotebookIDHandler)
-	mux.HandleFunc("GET /api/v1/cells/{cell_id}", cellController.GetCellByIDHandler)
-	mux.HandleFunc("PUT /api/v1/cells/{cell_id}", cellController.UpdateCellHandler)
-	mux.HandleFunc("DELETE /api/v1/cells/{cell_id}", cellController.DeleteCellHandler)
+	mux.Handle("POST /api/v1/notebooks/{notebook_id}/cells", 
+		middleware.AuthMiddleware(http.HandlerFunc(cellController.CreateCellHandler)))
+	mux.Handle("GET /api/v1/notebooks/{notebook_id}/cells", 
+		middleware.AuthMiddleware(http.HandlerFunc(cellController.GetCellsByNotebookIDHandler)))
+	mux.Handle("GET /api/v1/cells/{cell_id}", 
+		middleware.AuthMiddleware(http.HandlerFunc(cellController.GetCellByIDHandler)))
+	mux.Handle("PUT /api/v1/cells/{cell_id}", 
+		middleware.AuthMiddleware(http.HandlerFunc(cellController.UpdateCellHandler)))
+	mux.Handle("DELETE /api/v1/cells/{cell_id}", 
+		middleware.AuthMiddleware(http.HandlerFunc(cellController.DeleteCellHandler)))
 
 	// Cell Output Routes
-	mux.HandleFunc("POST /api/v1/cells/{cell_id}/outputs", cellController.CreateCellOutputHandler)
-	mux.HandleFunc("GET /api/v1/cells/{cell_id}/outputs", cellController.GetCellOutputsByCellIDHandler)
-	mux.HandleFunc("DELETE /api/v1/outputs/{output_id}", cellController.DeleteCellOutputHandler)
+	mux.Handle("POST /api/v1/cells/{cell_id}/outputs", 
+		middleware.AuthMiddleware(http.HandlerFunc(cellController.CreateCellOutputHandler)))
+	mux.Handle("GET /api/v1/cells/{cell_id}/outputs", 
+		middleware.AuthMiddleware(http.HandlerFunc(cellController.GetCellOutputsByCellIDHandler)))
+	mux.Handle("DELETE /api/v1/outputs/{output_id}", 
+		middleware.AuthMiddleware(http.HandlerFunc(cellController.DeleteCellOutputHandler)))
 
 	// Llm Routes
 	mux.Handle("POST /api/v1/llm/generate",

@@ -13,23 +13,27 @@ import (
 
 // CellModule encapsulates the business logic for cells.
 type CellModule struct {
-	Repo repository.CellRepository
+	Repo   repository.CellRepository
 	Logger zerolog.Logger
 }
 
 // NewCellModule creates and returns a new CellModule.
 func NewCellModule(repo repository.CellRepository, logger zerolog.Logger) *CellModule {
 	return &CellModule{
-		Repo: repo,
+		Repo:   repo,
 		Logger: logger,
 	}
 }
 
-func (m *CellModule) CreateCell(ctx context.Context, req *models.CreateCellRequest) (*models.Cell, error) {
+func (m *CellModule) CreateCell(
+	ctx context.Context,
+	req *models.CreateCellRequest,
+	userID string,
+) (*models.Cell, error) {
 	if req == nil {
 		return nil, errors.New("invalid create cell request")
 	}
-
+	// Ownership is verified in the controller before this is called.
 	cell := &models.Cell{
 		ID:         models.StringUUID(uuid.New()),
 		NotebookID: req.NotebookID,
@@ -45,16 +49,17 @@ func (m *CellModule) CreateCell(ctx context.Context, req *models.CreateCellReque
 	return m.Repo.CreateCell(ctx, cell)
 }
 
-func (m *CellModule) GetCellByID(ctx context.Context, id uuid.UUID) (*models.Cell, error) {
-	return m.Repo.GetCellByID(ctx, id)
+func (m *CellModule) GetCellByID(ctx context.Context, id uuid.UUID, userID string) (*models.Cell, error) {
+	return m.Repo.GetCellByID(ctx, id, userID)
 }
 
-func (m *CellModule) GetCellsByNotebookID(ctx context.Context, notebookID uuid.UUID) ([]*models.Cell, error) {
+func (m *CellModule) GetCellsByNotebookID(ctx context.Context, notebookID uuid.UUID, userID string) ([]*models.Cell, error) {
+	// Ownership is verified in the controller before this is called.
 	return m.Repo.GetCellsByNotebookID(ctx, notebookID)
 }
 
-func (m *CellModule) UpdateCell(ctx context.Context, id uuid.UUID, req *models.UpdateCellRequest) (*models.Cell, error) {
-	cell, err := m.Repo.GetCellByID(ctx, id)
+func (m *CellModule) UpdateCell(ctx context.Context, id uuid.UUID, req *models.UpdateCellRequest, userID string) (*models.Cell, error) {
+	cell, err := m.Repo.GetCellByID(ctx, id, userID) // Initial ownership check
 	if err != nil {
 		return nil, err
 	}
@@ -76,28 +81,29 @@ func (m *CellModule) UpdateCell(ctx context.Context, id uuid.UUID, req *models.U
 		cell.ExecutionCount = *req.ExecutionCount
 	}
 
-	return m.Repo.UpdateCell(ctx, cell)
+	return m.Repo.UpdateCell(ctx, cell, userID)
 }
 
-func (m *CellModule) UpdateCells(ctx context.Context, notebookID uuid.UUID, req *models.UpdateCellsRequest) error {
+func (m *CellModule) UpdateCells(ctx context.Context, notebookID uuid.UUID, req *models.UpdateCellsRequest, userID string) error {
 	m.Logger.Info().
 		Str("notebook_id", notebookID.String()).
 		Int("delete_count", len(req.CellsToDelete)).
 		Int("upsert_count", len(req.CellsToUpsert)).
 		Msg("Updating cells in module")
+	// Ownership is verified in the controller.
 	return m.Repo.UpdateCells(ctx, notebookID, req)
 }
 
-
-func (m *CellModule) DeleteCell(ctx context.Context, id uuid.UUID) error {
-	return m.Repo.DeleteCell(ctx, id)
+func (m *CellModule) DeleteCell(ctx context.Context, id uuid.UUID, userID string) error {
+	// Ownership is verified in the controller by calling GetCellByID first.
+	return m.Repo.DeleteCell(ctx, id, userID)
 }
 
 func (m *CellModule) CreateCellOutput(ctx context.Context, req *models.CreateCellOutputRequest) (*models.CellOutput, error) {
 	if req == nil {
 		return nil, errors.New("invalid create cell output request")
 	}
-
+	// Ownership is verified in the controller.
 	output := &models.CellOutput{
 		ID:          uuid.New(),
 		CellID:      req.CellID,
@@ -116,10 +122,16 @@ func (m *CellModule) CreateCellOutput(ctx context.Context, req *models.CreateCel
 	return createdOutput, nil
 }
 
-func (m *CellModule) GetCellOutputsByCellID(ctx context.Context, cellID uuid.UUID) ([]*models.CellOutput, error) {
+func (m *CellModule) GetCellOutputsByCellID(ctx context.Context, cellID uuid.UUID, userID string) ([]*models.CellOutput, error) {
+	// Ownership is verified in the controller.
 	return m.Repo.GetCellOutputsByCellID(ctx, cellID)
 }
 
-func (m *CellModule) DeleteCellOutput(ctx context.Context, id uuid.UUID) error {
-	return m.Repo.DeleteCellOutput(ctx, id)
+func (m *CellModule) GetCellOutputByID(ctx context.Context, outputID uuid.UUID, userID string) (*models.CellOutput, error) {
+	return m.Repo.GetCellOutputByID(ctx, outputID, userID)
+}
+
+func (m *CellModule) DeleteCellOutput(ctx context.Context, id uuid.UUID, userID string) error {
+	// Ownership is verified in the controller.
+	return m.Repo.DeleteCellOutput(ctx, id, userID)
 }

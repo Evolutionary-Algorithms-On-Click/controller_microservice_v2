@@ -3,29 +3,32 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg/models"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/rs/zerolog"
 )
 
-// CellRepository defines the data access methods for a cell.
+// CellRepository defines the data access methods for a cell, ensuring ownership.
 type CellRepository interface {
 	CreateCell(ctx context.Context, cell *models.Cell) (*models.Cell, error)
-	GetCellByID(ctx context.Context, id uuid.UUID) (*models.Cell, error)
+	GetCellByID(ctx context.Context, id uuid.UUID, userID string) (*models.Cell, error)
 	GetCellsByNotebookID(ctx context.Context, notebookID uuid.UUID) ([]*models.Cell, error)
-	UpdateCell(ctx context.Context, cell *models.Cell) (*models.Cell, error)
-	DeleteCell(ctx context.Context, id uuid.UUID) error
+	UpdateCell(ctx context.Context, cell *models.Cell, userID string) (*models.Cell, error)
+	DeleteCell(ctx context.Context, id uuid.UUID, userID string) error
 	UpdateCells(ctx context.Context, notebookID uuid.UUID, req *models.UpdateCellsRequest) error
 
 	CreateCellOutput(ctx context.Context, output *models.CellOutput) (*models.CellOutput, error)
 	GetCellOutputsByCellID(ctx context.Context, cellID uuid.UUID) ([]*models.CellOutput, error)
-	DeleteCellOutput(ctx context.Context, id uuid.UUID) error
+	GetCellOutputByID(ctx context.Context, outputID uuid.UUID, userID string) (*models.CellOutput, error)
+	DeleteCellOutput(ctx context.Context, id uuid.UUID, userID string) error
 }
 
 type cellRepository struct {
-	db *pgxpool.Pool
+	db     *pgxpool.Pool
 	Logger zerolog.Logger
 }
 
@@ -68,13 +71,19 @@ func (r *cellRepository) CreateCell(ctx context.Context, cell *models.Cell) (*mo
 	return &createdCell, nil
 }
 
-func (r *cellRepository) GetCellByID(ctx context.Context, id uuid.UUID) (*models.Cell, error) {
+func (r *cellRepository) GetCellByID(
+	ctx context.Context,
+	id uuid.UUID,
+	userID string,
+) (*models.Cell, error) {
 	query := `
-		SELECT id, notebook_id, cell_index, cell_name, cell_type, source, execution_count
-		FROM cells
-		WHERE id = $1;
+		SELECT c.id, c.notebook_id, c.cell_index, c.cell_name, c.cell_type, c.source, c.execution_count
+		FROM cells c
+		JOIN notebooks n ON c.notebook_id = n.id
+		JOIN problem_statements ps ON n.problem_statement_id = ps.id
+		WHERE c.id = $1 AND ps.created_by = $2;
 	`
-	row := r.db.QueryRow(ctx, query, id)
+	row := r.db.QueryRow(ctx, query, id, userID)
 
 	var cell models.Cell
 	var scannedID uuid.UUID
@@ -88,6 +97,9 @@ func (r *cellRepository) GetCellByID(ctx context.Context, id uuid.UUID) (*models
 		&cell.ExecutionCount,
 	)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errors.New("cell not found or not owned by user")
+		}
 		return nil, err
 	}
 	cell.ID = models.StringUUID(scannedID)
@@ -95,7 +107,11 @@ func (r *cellRepository) GetCellByID(ctx context.Context, id uuid.UUID) (*models
 	return &cell, nil
 }
 
-func (r *cellRepository) GetCellsByNotebookID(ctx context.Context, notebookID uuid.UUID) ([]*models.Cell, error) {
+func (r *cellRepository) GetCellsByNotebookID(
+	ctx context.Context,
+	notebookID uuid.UUID,
+) ([]*models.Cell, error) {
+	// Ownership check is expected to happen in the controller/module before this call
 	query := `
 		SELECT id, notebook_id, cell_index, cell_name, cell_type, source, execution_count
 		FROM cells
@@ -131,11 +147,15 @@ func (r *cellRepository) GetCellsByNotebookID(ctx context.Context, notebookID uu
 	return cells, nil
 }
 
-func (r *cellRepository) UpdateCell(ctx context.Context, cell *models.Cell) (*models.Cell, error) {
+func (r *cellRepository) UpdateCell(ctx context.Context, cell *models.Cell, userID string) (*models.Cell, error) {
 	query := `
 		UPDATE cells
 		SET cell_index = $2, cell_name = $3, cell_type = $4, source = $5, execution_count = $6
-		WHERE id = $1
+		WHERE id = $1 AND notebook_id IN (
+			SELECT n.id FROM notebooks n
+			JOIN problem_statements ps ON n.problem_statement_id = ps.id
+			WHERE ps.created_by = $7
+		)
 		RETURNING id, notebook_id, cell_index, cell_name, cell_type, source, execution_count;
 	`
 	row := r.db.QueryRow(ctx, query,
@@ -145,6 +165,7 @@ func (r *cellRepository) UpdateCell(ctx context.Context, cell *models.Cell) (*mo
 		cell.CellType,
 		cell.Source,
 		cell.ExecutionCount,
+		userID,
 	)
 
 	var updatedCell models.Cell
@@ -159,6 +180,9 @@ func (r *cellRepository) UpdateCell(ctx context.Context, cell *models.Cell) (*mo
 		&updatedCell.ExecutionCount,
 	)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errors.New("cell not found or not owned by user")
+		}
 		return nil, err
 	}
 	updatedCell.ID = models.StringUUID(scannedID)
@@ -166,9 +190,23 @@ func (r *cellRepository) UpdateCell(ctx context.Context, cell *models.Cell) (*mo
 	return &updatedCell, nil
 }
 
-func (r *cellRepository) DeleteCell(ctx context.Context, id uuid.UUID) error {
-	_, err := r.db.Exec(ctx, "DELETE FROM cells WHERE id = $1", id)
-	return err
+func (r *cellRepository) DeleteCell(ctx context.Context, id uuid.UUID, userID string) error {
+	query := `
+		DELETE FROM cells
+		WHERE id = $1 AND notebook_id IN (
+			SELECT n.id FROM notebooks n
+			JOIN problem_statements ps ON n.problem_statement_id = ps.id
+			WHERE ps.created_by = $2
+		);
+	`
+	cmdTag, err := r.db.Exec(ctx, query, id, userID)
+	if err != nil {
+		return err
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return errors.New("cell not found or not owned by user")
+	}
+	return nil
 }
 
 func (r *cellRepository) UpdateCells(ctx context.Context, notebookID uuid.UUID, req *models.UpdateCellsRequest) error {
@@ -194,7 +232,7 @@ func (r *cellRepository) UpdateCells(ctx context.Context, notebookID uuid.UUID, 
 			Str("notebook_id", notebookID.String()).
 			Str("new_requirements", *req.Requirements).
 			Msg("Updating notebook requirements")
-		
+
 		_, err := tx.Exec(ctx, "UPDATE notebooks SET requirements = $1 WHERE id = $2", *req.Requirements, notebookID)
 		if err != nil {
 			r.Logger.Error().Err(err).Msg("Failed to update notebook requirements")
@@ -318,6 +356,7 @@ func (r *cellRepository) CreateCellOutput(ctx context.Context, output *models.Ce
 }
 
 func (r *cellRepository) GetCellOutputsByCellID(ctx context.Context, cellID uuid.UUID) ([]*models.CellOutput, error) {
+	// Ownership check is expected to happen in the controller/module before this call
 	query := `
 		SELECT id, cell_id, output_index, type, data_json, minio_url, execution_count
 		FROM cell_outputs
@@ -353,7 +392,54 @@ func (r *cellRepository) GetCellOutputsByCellID(ctx context.Context, cellID uuid
 	return outputs, nil
 }
 
-func (r *cellRepository) DeleteCellOutput(ctx context.Context, id uuid.UUID) error {
-	_, err := r.db.Exec(ctx, "DELETE FROM cell_outputs WHERE id = $1", id)
-	return err
+func (r *cellRepository) GetCellOutputByID(ctx context.Context, outputID uuid.UUID, userID string) (*models.CellOutput, error) {
+	query := `
+		SELECT co.id, co.cell_id, co.output_index, co.type, co.data_json, co.minio_url, co.execution_count
+		FROM cell_outputs co
+		JOIN cells c ON co.cell_id = c.id
+		JOIN notebooks n ON c.notebook_id = n.id
+		JOIN problem_statements ps ON n.problem_statement_id = ps.id
+		WHERE co.id = $1 AND ps.created_by = $2;
+	`
+	row := r.db.QueryRow(ctx, query, outputID, userID)
+
+	var output models.CellOutput
+	var cellID uuid.UUID
+	err := row.Scan(
+		&output.ID,
+		&cellID,
+		&output.OutputIndex,
+		&output.Type,
+		&output.DataJSON,
+		&output.MinioURL,
+		&output.ExecutionCount,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errors.New("output not found or not owned by user")
+		}
+		return nil, err
+	}
+	output.CellID = models.StringUUID(cellID)
+	return &output, nil
+}
+
+func (r *cellRepository) DeleteCellOutput(ctx context.Context, id uuid.UUID, userID string) error {
+	query := `
+		DELETE FROM cell_outputs
+		WHERE id = $1 AND cell_id IN (
+			SELECT c.id FROM cells c
+			JOIN notebooks n ON c.notebook_id = n.id
+			JOIN problem_statements ps ON n.problem_statement_id = ps.id
+			WHERE ps.created_by = $2
+		);
+	`
+	cmdTag, err := r.db.Exec(ctx, query, id, userID)
+	if err != nil {
+		return err
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return errors.New("output not found or not owned by user")
+	}
+	return nil
 }
