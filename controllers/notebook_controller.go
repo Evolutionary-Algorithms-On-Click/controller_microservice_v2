@@ -1,15 +1,16 @@
 package controllers
 
 import (
-	"time"
-	"encoding/json"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
+	"github.com/Thanus-Kumaar/controller_microservice_v2/middleware"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/modules"
-	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg/models"
 	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg" // Added pkg import
+	"github.com/Thanus-Kumaar/controller_microservice_v2/pkg/models"
 	"github.com/rs/zerolog"
 )
 
@@ -26,19 +27,24 @@ func NewNotebookController(module *modules.NotebookModule, logger *zerolog.Logge
 	}
 }
 
-
-
 // CreateNotebookHandler handles POST /api/v1/notebooks
 func (c *NotebookController) CreateNotebookHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
+
+	user, ok := ctx.Value(middleware.UserContextKey).(*middleware.User)
+	if !ok || user.ID == "" {
+		c.Logger.Error().Msg("userID not found in context for notebook creation")
+		http.Error(w, "User not found in context", http.StatusUnauthorized)
+		return
+	}
 
 	var req models.CreateNotebookRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	nb, err := c.NotebookModule.CreateNotebook(ctx, &req)
+	nb, err := c.NotebookModule.CreateNotebook(ctx, &req, user.ID)
 	if err != nil {
 		c.Logger.Error().Err(err).Msg("failed to create notebook")
 		http.Error(w, fmt.Sprintf("error creating notebook: %v", err), http.StatusInternalServerError)
@@ -51,6 +57,13 @@ func (c *NotebookController) CreateNotebookHandler(w http.ResponseWriter, r *htt
 func (c *NotebookController) ListNotebooksHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
+
+	user, ok := ctx.Value(middleware.UserContextKey).(*middleware.User)
+	if !ok || user.ID == "" {
+		c.Logger.Error().Msg("userID not found in context for listing notebooks")
+		http.Error(w, "User not found in context", http.StatusUnauthorized)
+		return
+	}
 
 	filters := make(map[string]string)
 	query := r.URL.Query()
@@ -68,7 +81,7 @@ func (c *NotebookController) ListNotebooksHandler(w http.ResponseWriter, r *http
 		filters["offset"] = offset
 	}
 
-	nbs, err := c.NotebookModule.ListNotebooks(ctx, filters)
+	nbs, err := c.NotebookModule.ListNotebooks(ctx, filters, user.ID)
 	if err != nil {
 		c.Logger.Error().Err(err).Msg("failed to list notebooks")
 		http.Error(w, "error listing notebooks", http.StatusInternalServerError)
@@ -83,7 +96,14 @@ func (c *NotebookController) GetNotebookByIDHandler(w http.ResponseWriter, r *ht
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	nb, err := c.NotebookModule.GetNotebookByID(ctx, notebookID)
+	user, ok := ctx.Value(middleware.UserContextKey).(*middleware.User)
+	if !ok || user.ID == "" {
+		c.Logger.Error().Msg("userID not found in context for getting notebook by ID")
+		http.Error(w, "User not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	nb, err := c.NotebookModule.GetNotebookByID(ctx, notebookID, user.ID)
 	if err != nil {
 		c.Logger.Error().Err(err).Str("notebook_id", notebookID).Msg("get notebook failed")
 		http.Error(w, "not found", http.StatusNotFound)
@@ -98,12 +118,19 @@ func (c *NotebookController) UpdateNotebookByIDHandler(w http.ResponseWriter, r 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
+	user, ok := ctx.Value(middleware.UserContextKey).(*middleware.User)
+	if !ok || user.ID == "" {
+		c.Logger.Error().Msg("userID not found in context for updating notebook by ID")
+		http.Error(w, "User not found in context", http.StatusUnauthorized)
+		return
+	}
+
 	var req models.UpdateNotebookRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	updated, err := c.NotebookModule.UpdateNotebook(ctx, notebookID, &req)
+	updated, err := c.NotebookModule.UpdateNotebook(ctx, notebookID, &req, user.ID)
 	if err != nil {
 		c.Logger.Error().Err(err).Str("notebook_id", notebookID).Msg("update notebook failed")
 		http.Error(w, "error updating notebook", http.StatusInternalServerError)
@@ -118,12 +145,17 @@ func (c *NotebookController) DeleteNotebookByIDHandler(w http.ResponseWriter, r 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	if err := c.NotebookModule.DeleteNotebook(ctx, notebookID); err != nil {
+	user, ok := ctx.Value(middleware.UserContextKey).(*middleware.User)
+	if !ok || user.ID == "" {
+		c.Logger.Error().Msg("userID not found in context for deleting notebook by ID")
+		http.Error(w, "User not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	if err := c.NotebookModule.DeleteNotebook(ctx, notebookID, user.ID); err != nil {
 		c.Logger.Error().Err(err).Str("notebook_id", notebookID).Msg("delete notebook failed")
 		http.Error(w, "error deleting notebook", http.StatusInternalServerError)
 		return
 	}
 	pkg.WriteJSONResponseWithLogger(w, http.StatusNoContent, nil, c.Logger)
 }
-
-

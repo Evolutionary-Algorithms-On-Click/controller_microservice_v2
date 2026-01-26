@@ -14,10 +14,10 @@ import (
 
 type NotebookRepository interface {
 	CreateNotebook(ctx context.Context, req *models.CreateNotebookRequest) (*models.Notebook, error)
-	ListNotebooks(ctx context.Context, filters map[string]string) ([]models.Notebook, error)
-	GetNotebookByID(ctx context.Context, id string) (*models.Notebook, error)
-	UpdateNotebook(ctx context.Context, id string, req *models.UpdateNotebookRequest) (*models.Notebook, error)
-	DeleteNotebook(ctx context.Context, id string) error
+	ListNotebooks(ctx context.Context, filters map[string]string, userID string) ([]models.Notebook, error)
+	GetNotebookByID(ctx context.Context, id string, userID string) (*models.Notebook, error)
+	UpdateNotebook(ctx context.Context, id string, req *models.UpdateNotebookRequest, userID string) (*models.Notebook, error)
+	DeleteNotebook(ctx context.Context, id string, userID string) error
 }
 
 type notebookRepository struct {
@@ -30,7 +30,10 @@ func NewNotebookRepository(pool *pgxpool.Pool) NotebookRepository {
 	}
 }
 
-func (r *notebookRepository) CreateNotebook(ctx context.Context, req *models.CreateNotebookRequest) (*models.Notebook, error) {
+func (r *notebookRepository) CreateNotebook(
+	ctx context.Context,
+	req *models.CreateNotebookRequest,
+) (*models.Notebook, error) {
 	id := uuid.New().String()
 	now := time.Now().UTC()
 
@@ -66,26 +69,29 @@ func (r *notebookRepository) CreateNotebook(ctx context.Context, req *models.Cre
 	return &nb, nil
 }
 
-func (r *notebookRepository) ListNotebooks(ctx context.Context, filters map[string]string) ([]models.Notebook, error) {
-	query := `SELECT id, title, context_minio_url, requirements, problem_statement_id, created_at, last_modified_at FROM notebooks`
-	args := []any{}
-	where := ""
+func (r *notebookRepository) ListNotebooks(
+	ctx context.Context,
+	filters map[string]string,
+	userID string,
+) ([]models.Notebook, error) {
+	query := `
+		SELECT n.id, n.title, n.context_minio_url, n.requirements, n.problem_statement_id, n.created_at, n.last_modified_at
+		FROM notebooks n
+		JOIN problem_statements ps ON n.problem_statement_id = ps.id
+		WHERE ps.created_by = $1`
+	args := []any{userID}
+	argIndex := 2
 
 	if filters != nil {
-		i := 1
-		for key, val := range filters {
-			if i == 1 {
-				where += " WHERE "
-			} else {
-				where += " AND "
-			}
-			where += key + " = $" + strconv.Itoa(i)
-			args = append(args, val)
-			i++
+		if problemStatementID, ok := filters["problem_statement_id"]; ok && problemStatementID != "" {
+			query += " AND n.problem_statement_id = $" + strconv.Itoa(argIndex)
+			args = append(args, problemStatementID)
+			// argIndex=argIndex+1
 		}
+		// Add other filters as needed
 	}
 
-	rows, err := r.pool.Query(ctx, query+where, args...)
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +117,11 @@ func (r *notebookRepository) ListNotebooks(ctx context.Context, filters map[stri
 	return notebooks, nil
 }
 
-func (r *notebookRepository) GetNotebookByID(ctx context.Context, id string) (*models.Notebook, error) {
+func (r *notebookRepository) GetNotebookByID(
+	ctx context.Context,
+	id string,
+	userID string,
+) (*models.Notebook, error) {
 	notebookUUID, err := uuid.Parse(id)
 	if err != nil {
 		return nil, errors.New("invalid notebook ID format")
@@ -126,6 +136,8 @@ func (r *notebookRepository) GetNotebookByID(ctx context.Context, id string) (*m
 			cv.id, cv.evolution_run_id, cv.code, cv.metric, cv.is_best, cv.generation, cv.parent_variant_id
 		FROM
 			notebooks n
+		JOIN
+			problem_statements ps ON n.problem_statement_id = ps.id
 		LEFT JOIN
 			cells c ON n.id = c.notebook_id
 		LEFT JOIN
@@ -135,15 +147,15 @@ func (r *notebookRepository) GetNotebookByID(ctx context.Context, id string) (*m
 		LEFT JOIN
 			cell_variations cv ON er.id = cv.evolution_run_id
 		WHERE
-			n.id = $1
+			n.id = $1 AND ps.created_by = $2
 		ORDER BY
-			c.cell_index ASC, 
-			co.output_index ASC, 
-			er.start_time ASC, 
+			c.cell_index ASC,
+			co.output_index ASC,
+			er.start_time ASC,
 			cv.generation ASC;
 	`
 
-	rows, err := r.pool.Query(ctx, query, notebookUUID)
+	rows, err := r.pool.Query(ctx, query, notebookUUID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -285,8 +297,12 @@ func (r *notebookRepository) GetNotebookByID(ctx context.Context, id string) (*m
 
 	return &notebook, nil
 }
-
-func (r *notebookRepository) UpdateNotebook(ctx context.Context, id string, req *models.UpdateNotebookRequest) (*models.Notebook, error) {
+func (r *notebookRepository) UpdateNotebook(
+	ctx context.Context,
+	id string,
+	req *models.UpdateNotebookRequest,
+	userID string,
+) (*models.Notebook, error) {
 	setClause := ""
 	args := []any{}
 	argIndex := 1
@@ -306,20 +322,22 @@ func (r *notebookRepository) UpdateNotebook(ctx context.Context, id string, req 
 	}
 
 	if setClause == "" {
-		return r.GetNotebookByID(ctx, id)
+		return r.GetNotebookByID(ctx, id, userID)
 	}
 
 	setClause += ", last_modified_at = $" + strconv.Itoa(argIndex)
 	args = append(args, time.Now().UTC())
 	argIndex++
 
-	args = append(args, id)
+	// Append notebook ID and user ID for WHERE clause
+	args = append(args, id, userID)
 
 	query := `
-		UPDATE notebooks
+		UPDATE notebooks n
 		SET ` + setClause + `
-		WHERE id = $` + strconv.Itoa(argIndex) + `
-		RETURNING id, title, context_minio_url, requirements, problem_statement_id, created_at, last_modified_at;
+		FROM problem_statements ps
+		WHERE n.id = $` + strconv.Itoa(argIndex) + ` AND n.problem_statement_id = ps.id AND ps.created_by = $` + strconv.Itoa(argIndex+1) + `
+		RETURNING n.id, n.title, n.context_minio_url, n.requirements, n.problem_statement_id, n.created_at, n.last_modified_at;
 	`
 
 	row := r.pool.QueryRow(ctx, query, args...)
@@ -340,16 +358,22 @@ func (r *notebookRepository) UpdateNotebook(ctx context.Context, id string, req 
 	return &nb, nil
 }
 
-func (r *notebookRepository) DeleteNotebook(ctx context.Context, id string) error {
-	cmd, err := r.pool.Exec(ctx, `DELETE FROM notebooks WHERE id = $1;`, id)
+func (r *notebookRepository) DeleteNotebook(
+	ctx context.Context,
+	id string,
+	userID string,
+) error {
+	query := `
+		DELETE FROM notebooks n
+		USING problem_statements ps
+		WHERE n.id = $1 AND n.problem_statement_id = ps.id AND ps.created_by = $2;
+	`
+	cmd, err := r.pool.Exec(ctx, query, id, userID)
 	if err != nil {
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
-		return errors.New("notebook not found")
+		return errors.New("notebook not found or not owned by user")
 	}
 	return nil
 }
-
-
-
