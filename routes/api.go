@@ -29,6 +29,12 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) {
 	problemModule := modules.NewProblemModule(problemRepo, *pkg.Logger) // Pass the logger here
 	cellModule := modules.NewCellModule(cellRepo, *pkg.Logger)
 
+	userDataDir := os.Getenv("USER_DATA_DIR")
+	if userDataDir == "" {
+		userDataDir = "/mnt/user_data"
+	}
+	fileModule := modules.NewFileModule(userDataDir)
+
 	// Initialize Controllers
 	notebookController := controllers.NewNotebookController(notebookModule, pkg.Logger)
 	sessionController := controllers.NewSessionController(sessionModule, *pkg.Logger)
@@ -36,6 +42,7 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) {
 	problemController := controllers.NewProblemController(problemModule, *pkg.Logger)
 	cellController := controllers.NewCellController(cellModule, *pkg.Logger, notebookModule)
 	kernelController := controllers.NewKernelController(c, *pkg.Logger, cellRepo)
+	fileController := controllers.NewFileController(fileModule, *pkg.Logger)
 
 	// Register the handler functions with API versioning (v1)
 
@@ -76,6 +83,14 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) {
 		middleware.AuthMiddleware(http.HandlerFunc(sessionController.UpdateSessionByIDHandler)))
 	mux.Handle("DELETE /api/v1/sessions/{id}",
 		middleware.AuthMiddleware(http.HandlerFunc(sessionController.DeleteSessionByIDHandler)))
+
+	// User file Routes
+	mux.Handle("POST /api/v1/sessions/{session_id}/files",
+		middleware.AuthMiddleware(http.HandlerFunc(fileController.UploadFileHandler)))
+	mux.Handle("GET /api/v1/sessions/{session_id}/files",
+		middleware.AuthMiddleware(http.HandlerFunc(fileController.ListFilesHandler)))
+	mux.Handle("DELETE /api/v1/sessions/{session_id}/files/{filename}",
+		middleware.AuthMiddleware(http.HandlerFunc(fileController.DeleteFileHandler)))
 
 	// Cell Routes
 	mux.Handle("POST /api/v1/notebooks/{notebook_id}/cells", 

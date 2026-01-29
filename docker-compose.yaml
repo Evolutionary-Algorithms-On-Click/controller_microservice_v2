@@ -8,6 +8,7 @@ services:
       - "8080:8080"
     volumes:
       - .:/app
+      - user_data:/mnt/user_data
     environment:
       DATABASE_URL: "postgresql://root@cockroachdb:26257/defaultdb?sslmode=disable"
       APP_ENV: "DEVELOPMENT"
@@ -15,8 +16,9 @@ services:
       JUPYTER_AUTH_TOKEN: "YOUR_SECRET_TOKEN"
       CULL_INTERVAL_MINUTES: 10
       IDLE_THRESHOLD_MINUTES: 30
-      AUTH_GRPC_ADDRESS: "localhost:5001"
+      AUTH_GRPC_ADDRESS: "auth:5001"
       LLM_MICROSERVICE_URL: "http://host.docker.internal:8000"
+      USER_DATA_DIR: "/mnt/user_data"
     networks:
       - evoc-net
     depends_on:
@@ -40,6 +42,8 @@ services:
       KG_PORT: 8888
     ports:
       - "8888:8888"
+    volumes:
+      - user_data:/mnt/user_data
     networks:
       - evoc-net
     depends_on:
@@ -57,6 +61,7 @@ services:
   # 4. CockroachDB (Database) - Image remains the same
   cockroachdb:
     image: cockroachdb/cockroach:v22.2.0
+    hostname: cockroachdb
     command: start-single-node --insecure --host=cockroachdb
     ports:
       - "26257:26257"
@@ -82,8 +87,11 @@ services:
 # Define the shared network (Docker DNS)
 networks:
   evoc-net:
-    driver: bridge
+    external: true
+    name: docker_evoc-net
+
 
 # Define persistent storage volumes
 volumes:
   cockroach-data:
+  user_data:
