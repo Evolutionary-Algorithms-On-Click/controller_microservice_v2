@@ -89,6 +89,8 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) {
 		middleware.AuthMiddleware(http.HandlerFunc(fileController.UploadFileHandler)))
 	mux.Handle("GET /api/v1/sessions/{session_id}/files",
 		middleware.AuthMiddleware(http.HandlerFunc(fileController.ListFilesHandler)))
+	mux.Handle("DELETE /api/v1/sessions/{session_id}/files/{filename}",
+		middleware.AuthMiddleware(http.HandlerFunc(fileController.DeleteFileHandler)))
 
 	// Cell Routes
 	mux.Handle("POST /api/v1/notebooks/{notebook_id}/cells", 

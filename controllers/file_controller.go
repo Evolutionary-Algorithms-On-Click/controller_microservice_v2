@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"net/http"
+	"os"
 	"path/filepath"
 
 	"github.com/Thanus-Kumaar/controller_microservice_v2/modules"
@@ -74,4 +75,33 @@ func (c *FileController) ListFilesHandler(w http.ResponseWriter, r *http.Request
 	pkg.WriteJSONResponseWithLogger(w, http.StatusOK, map[string][]string{
 		"files": files,
 	}, &c.Logger)
+}
+
+func (c *FileController) DeleteFileHandler(w http.ResponseWriter, r *http.Request) {
+	sessionIDStr := r.PathValue("session_id")
+	sessionID, err := uuid.Parse(sessionIDStr)
+	if err != nil {
+		http.Error(w, "invalid session ID", http.StatusBadRequest)
+		return
+	}
+
+	filename := r.PathValue("filename")
+	if filename == "" {
+		http.Error(w, "filename is required", http.StatusBadRequest)
+		return
+	}
+
+	err = c.Module.DeleteFile(sessionID, filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			http.Error(w, "file not found", http.StatusNotFound)
+			return
+		}
+
+		c.Logger.Error().Err(err).Msg("failed to delete file")
+		http.Error(w, "failed to delete file", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

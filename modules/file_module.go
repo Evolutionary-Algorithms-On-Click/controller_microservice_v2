@@ -65,6 +65,21 @@ func (m *FileModule) ListFiles(sessionID uuid.UUID) ([]string, error) {
 	return files, nil
 }
 
+func (m *FileModule) DeleteFile(sessionID uuid.UUID, filename string) error {
+	sessionDir := filepath.Join(m.BaseDir, sessionID.String())
+
+	// Sanitize filename to prevent directory traversal
+	filename = filepath.Base(filename)
+	filename = strings.ReplaceAll(filename, "..", "") 
+
+	filePath := filepath.Join(sessionDir, filename)
+
+	if err := os.Remove(filePath); err != nil {
+		return fmt.Errorf("failed to delete file: %w", err)
+	}
+	return nil
+}
+
 func (m *FileModule) DeleteSessionFiles(sessionID uuid.UUID) error {
 	sessionDir := filepath.Join(m.BaseDir, sessionID.String())
 	// Check if exists first to avoid error if already gone
