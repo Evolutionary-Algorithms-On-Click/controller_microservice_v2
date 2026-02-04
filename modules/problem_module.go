@@ -1,8 +1,16 @@
 package modules
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/Thanus-Kumaar/controller_microservice_v2/db/repository"
@@ -13,13 +21,25 @@ import (
 
 // ProblemModule encapsulates the business logic for problem statements.
 type ProblemModule struct {
-	ProblemRepo repository.ProblemRepository
-	logger      zerolog.Logger
+	ProblemRepo  repository.ProblemRepository
+	NotebookRepo repository.NotebookRepository
+	FileModule   *FileModule
+	logger       zerolog.Logger
 }
 
 // NewProblemModule creates and returns a new ProblemModule.
-func NewProblemModule(problemRepo repository.ProblemRepository, logger zerolog.Logger) *ProblemModule {
-	return &ProblemModule{ProblemRepo: problemRepo, logger: logger}
+func NewProblemModule(
+	problemRepo repository.ProblemRepository,
+	notebookRepo repository.NotebookRepository,
+	fileModule *FileModule,
+	logger zerolog.Logger,
+) *ProblemModule {
+	return &ProblemModule{
+		ProblemRepo:  problemRepo,
+		NotebookRepo: notebookRepo,
+		FileModule:   fileModule,
+		logger:       logger,
+	}
 }
 
 // WithLogger allows setting the logger for the module.
@@ -195,3 +215,157 @@ func (m *ProblemModule) UpdateProblem(ctx context.Context, problemID string, req
 	return updatedProblem, nil
 }
 
+// SubmitNotebook submits a notebook and a file to the volpe service.
+func (m *ProblemModule) SubmitNotebook(ctx context.Context, userID, notebookID, sessionID, filename string) (map[string]interface{}, error) {
+	m.logger.Info().Str("notebookID", notebookID).Str("userID", userID).Msg("submitting notebook")
+
+	// Fetch Notebook
+	notebook, err := m.NotebookRepo.GetNotebookByID(ctx, notebookID, userID)
+	if err != nil {
+		m.logger.Error().Err(err).Msg("failed to fetch notebook")
+		return nil, fmt.Errorf("failed to fetch notebook: %w", err)
+	}
+
+	// Prepare Request Data JSON
+	volpeCells := make([]map[string]interface{}, len(notebook.Cells))
+	for i, cell := range notebook.Cells {
+		volpeCells[i] = map[string]interface{}{
+			"cell_type":       cell.CellType,
+			"cell_name":       cell.CellName.String, // Use String value, empty if invalid
+			"source":          cell.Source,
+			"execution_count": nil, // Prompt example uses null
+			"metadata": map[string]interface{}{
+				"cell_index": cell.CellIndex,
+			},
+		}
+		if cell.ExecutionCount != 0 {
+			volpeCells[i]["execution_count"] = cell.ExecutionCount
+		}
+	}
+
+	requirements := ""
+	if notebook.Requirements.Valid {
+		requirements = notebook.Requirements.String
+	}
+
+	requestData := map[string]interface{}{
+		"user_id":     userID,
+		"notebook_id": notebookID,
+		"notebook": map[string]interface{}{
+			"cells":        volpeCells,
+			"metadata":     map[string]interface{}{},
+			"requirements": requirements,
+		},
+		"requirements": requirements,
+	}
+
+	requestDataJSON, err := json.Marshal(requestData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request data: %w", err)
+	}
+
+	// Locate and Read File
+	// Check for directory traversal in filename
+
+	if filename != filepath.Base(filename) {
+		return nil, errors.New("invalid filename")
+	}
+	filePath := filepath.Join(m.FileModule.BaseDir, sessionID, filename)
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	// Create Multipart Request
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	// Add request_data
+	if err := writer.WriteField("request_data", string(requestDataJSON)); err != nil {
+		return nil, err
+	}
+
+	// Add metadata_json
+	metadataJSON := `{"memory": 1,"targetInstances":8}`
+	if err := writer.WriteField("metadata_json", metadataJSON); err != nil {
+		return nil, err
+	}
+
+	// Add file
+	part, err := writer.CreateFormFile("file", filename)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := io.Copy(part, file); err != nil {
+		return nil, err
+	}
+
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+
+	// Send Request
+	volpeURL := os.Getenv("VOLPE_SERVICE_URL")
+	if volpeURL == "" {
+		volpeURL = "http://localhost:7070"
+	}
+	reqURL := fmt.Sprintf("%s/submit", volpeURL)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request to volpe: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		m.logger.Error().Int("status", resp.StatusCode).Str("body", string(respBody)).Msg("volpe returned error")
+		return nil, fmt.Errorf("volpe returned status: %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return result, nil
+}
+
+// GetSubmissionResults streams the SSE results from volpe.
+func (m *ProblemModule) GetSubmissionResults(ctx context.Context, problemID string) (io.ReadCloser, error) {
+	volpeURL := os.Getenv("VOLPE_SERVICE_URL")
+	if volpeURL == "" {
+		volpeURL = "http://localhost:9000"
+	}
+	reqURL := fmt.Sprintf("%s/results/%s", volpeURL, problemID)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("Error with Volpe service: %w", err)
+	}
+
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Cache-Control", "no-cache")
+	req.Header.Set("Connection", "keep-alive")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to volpe results: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, fmt.Errorf("volpe returned status: %d", resp.StatusCode)
+	}
+
+	return resp.Body, nil
+}

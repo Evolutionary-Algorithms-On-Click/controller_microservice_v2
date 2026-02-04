@@ -3,7 +3,9 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -211,4 +213,95 @@ func (c *ProblemController) DeleteProblemByIDHandler(w http.ResponseWriter, r *h
 
 	c.Logger.Info().Str("problemID", problemID).Msg("successfully deleted problem by ID")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// SubmitNotebookHandler handles POST /api/v1/submission/submit
+func (c *ProblemController) SubmitNotebookHandler(w http.ResponseWriter, r *http.Request) {
+	c.Logger.Info().Msg("received request to submit notebook")
+
+	user, ok := r.Context().Value(middleware.UserContextKey).(*middleware.User)
+	if !ok {
+		c.Logger.Error().Msg("user not found in context for submission")
+		http.Error(w, "user not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	type submitRequest struct {
+		NotebookID string `json:"notebook_id"`
+		Filename   string `json:"filename"`
+		SessionID  string `json:"session_id"`
+	}
+
+	var req submitRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		c.Logger.Error().Err(err).Msg("invalid request body for submission")
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.NotebookID == "" || req.Filename == "" || req.SessionID == "" {
+		http.Error(w, "notebook_id, filename, and session_id are required", http.StatusBadRequest)
+		return
+	}
+
+	// We don't limit the context time here as submission might take time, or we rely on default timeouts
+	ctx := r.Context()
+
+	result, err := c.ProblemModule.SubmitNotebook(ctx, user.ID, req.NotebookID, req.SessionID, req.Filename)
+	if err != nil {
+		c.Logger.Error().Err(err).Msg("failed to submit notebook")
+		http.Error(w, fmt.Sprintf("failed to submit notebook: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	pkg.WriteJSONResponseWithLogger(w, http.StatusOK, result, &c.Logger)
+}
+
+// GetSubmissionResultsHandler handles GET /api/v1/submission/results/{problemId}
+func (c *ProblemController) GetSubmissionResultsHandler(w http.ResponseWriter, r *http.Request) {
+	problemID := r.PathValue("problemId")
+	c.Logger.Info().Str("problemID", problemID).Msg("received request to get submission results")
+
+	ctx := r.Context()
+
+	// Connect to volpe and get the stream
+	stream, err := c.ProblemModule.GetSubmissionResults(ctx, problemID)
+	if err != nil {
+		c.Logger.Error().Err(err).Msg("failed to get results stream")
+		http.Error(w, fmt.Sprintf("failed to get results: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer stream.Close()
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	buf := make([]byte, 1024)
+	for {
+		n, err := stream.Read(buf)
+		if n > 0 {
+			if _, wErr := w.Write(buf[:n]); wErr != nil {
+				c.Logger.Error().Err(wErr).Msg("failed to write to response")
+				break
+			}
+			flusher.Flush()
+		}
+		if err != nil {
+			if err != io.EOF {
+				if errors.Is(err, context.Canceled) {
+					c.Logger.Info().Msg("client disconnected from submission results stream")
+				} else {
+					c.Logger.Error().Err(err).Msg("error reading from volpe stream")
+				}
+			}
+			break
+		}
+	}
 }

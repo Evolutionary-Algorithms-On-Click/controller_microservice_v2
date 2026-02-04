@@ -22,18 +22,18 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) {
 	problemRepo := repository.NewProblemRepository(db.Pool).WithLogger(*pkg.Logger)
 	cellRepo := repository.NewCellRepository(db.Pool, *pkg.Logger)
 
-	// Initialize Modules
-	notebookModule := modules.NewNotebookModule(notebookRepo, problemRepo)
-	llmModule := modules.NewLlmModule(llmRepo)
-	sessionModule := modules.NewSessionModule(sessionRepo, c, *pkg.Logger, notebookRepo)
-	problemModule := modules.NewProblemModule(problemRepo, *pkg.Logger) // Pass the logger here
-	cellModule := modules.NewCellModule(cellRepo, *pkg.Logger)
-
 	userDataDir := os.Getenv("USER_DATA_DIR")
 	if userDataDir == "" {
 		userDataDir = "/mnt/user_data"
 	}
 	fileModule := modules.NewFileModule(userDataDir)
+
+	// Initialize Modules
+	notebookModule := modules.NewNotebookModule(notebookRepo, problemRepo)
+	llmModule := modules.NewLlmModule(llmRepo)
+	sessionModule := modules.NewSessionModule(sessionRepo, c, *pkg.Logger, notebookRepo)
+	problemModule := modules.NewProblemModule(problemRepo, notebookRepo, fileModule, *pkg.Logger) // Pass the logger here
+	cellModule := modules.NewCellModule(cellRepo, *pkg.Logger)
 
 	// Initialize Controllers
 	notebookController := controllers.NewNotebookController(notebookModule, pkg.Logger)
@@ -57,6 +57,12 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *jupyterclient.Client) {
 		middleware.AuthMiddleware(http.HandlerFunc(problemController.UpdateProblemByIDHandler)))
 	mux.Handle("DELETE /api/v1/problems/{id}",
 		middleware.AuthMiddleware(http.HandlerFunc(problemController.DeleteProblemByIDHandler)))
+
+	// VolPE Routes
+	mux.Handle("POST /api/v1/submission/submit",
+		middleware.AuthMiddleware(http.HandlerFunc(problemController.SubmitNotebookHandler)))
+	mux.Handle("GET /api/v1/submission/results/{problemId}",
+		middleware.AuthMiddleware(http.HandlerFunc(problemController.GetSubmissionResultsHandler)))
 
 	// Notebook Routes
 	mux.Handle("POST /api/v1/notebooks",
