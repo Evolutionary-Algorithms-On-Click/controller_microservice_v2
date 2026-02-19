@@ -226,11 +226,10 @@ func (r *cellRepository) UpdateCells(ctx context.Context, notebookID uuid.UUID, 
 		_ = tx.Rollback(ctx)
 	}()
 
-	// Update notebook requirements if provided
+	// update notebook requirements if provided
 	if req.Requirements != nil {
 		r.Logger.Info().
 			Str("notebook_id", notebookID.String()).
-			Str("new_requirements", *req.Requirements).
 			Msg("Updating notebook requirements")
 
 		_, err := tx.Exec(ctx, "UPDATE notebooks SET requirements = $1 WHERE id = $2", *req.Requirements, notebookID)
@@ -240,41 +239,72 @@ func (r *cellRepository) UpdateCells(ctx context.Context, notebookID uuid.UUID, 
 		}
 	}
 
-	// 1. Handle Deletions
-	if len(req.CellsToDelete) > 0 {
-		cellsToDeleteUUIDs := make([]uuid.UUID, len(req.CellsToDelete))
-		for i, id := range req.CellsToDelete {
-			cellsToDeleteUUIDs[i] = id.ToUUID()
+	// fetch existing cell ids to find orphans
+	rows, err := tx.Query(ctx, "SELECT id FROM cells WHERE notebook_id = $1", notebookID)
+	if err != nil {
+		r.Logger.Error().Err(err).Msg("Failed to fetch existing cell IDs")
+		return err
+	}
+	defer rows.Close()
+
+	existingIDs := make(map[string]bool)
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return err
 		}
-		r.Logger.Info().Interface("cells_to_delete", cellsToDeleteUUIDs).Msg("Deleting cells")
-		if _, err := tx.Exec(ctx, "DELETE FROM cells WHERE id = ANY($1)", cellsToDeleteUUIDs); err != nil {
-			r.Logger.Error().Err(err).Msg("Failed to delete cells")
-			return err // Rollback will be called by defer
+		existingIDs[id.String()] = true
+	}
+
+	// map order for quick lookup and identify cells to keep
+	orderMap := make(map[string]int)
+	keepIDs := make(map[string]bool)
+	for i, id := range req.UpdatedOrder {
+		idStr := id.ToUUID().String()
+		orderMap[idStr] = i
+		keepIDs[idStr] = true
+	}
+
+	// determine cells to delete: explicitly requested + orphans
+	idsToDeleteMap := make(map[uuid.UUID]bool)
+	for _, id := range req.CellsToDelete {
+		idsToDeleteMap[id.ToUUID()] = true
+	}
+	for idStr := range existingIDs {
+		if !keepIDs[idStr] {
+			u, _ := uuid.Parse(idStr)
+			idsToDeleteMap[u] = true
 		}
 	}
 
-	orderMap := make(map[string]int)
-	for i, id := range req.UpdatedOrder {
-		orderMap[id.ToUUID().String()] = i
+	// delete all orphaned and explicitly removed cells
+	if len(idsToDeleteMap) > 0 {
+		deleteSlice := make([]uuid.UUID, 0, len(idsToDeleteMap))
+		for id := range idsToDeleteMap {
+			deleteSlice = append(deleteSlice, id)
+		}
+		if _, err := tx.Exec(ctx, "DELETE FROM cells WHERE id = ANY($1)", deleteSlice); err != nil {
+			r.Logger.Error().Err(err).Msg("Failed to delete cells")
+			return err
+		}
 	}
 
 	upsertedIDs := make(map[string]bool)
 
-	// 2. Handle Upserts for modified/new cells
+	// handle upserts for modified or new cells
 	if len(req.CellsToUpsert) > 0 {
-		r.Logger.Info().Interface("cells_to_upsert", req.CellsToUpsert).Msg("Upserting cells")
 		for idStr, cellData := range req.CellsToUpsert {
-			upsertedIDs[idStr] = true // Mark this ID as handled
+			upsertedIDs[idStr] = true
 			cellUUID, err := uuid.Parse(idStr)
 			if err != nil {
-				r.Logger.Error().Err(err).Str("cell_id_string", idStr).Msg("Failed to parse cell ID string to UUID")
 				return err
 			}
 
 			cellIndex, ok := orderMap[idStr]
 			if !ok {
-				cellIndex = 9999
-				r.Logger.Warn().Str("cell_id", idStr).Msg("Cell ID found in upsert map but not in updated order. Assigning high index.")
+				// fallback to end of list if order is missing
+				cellIndex = len(req.UpdatedOrder)
+				r.Logger.Warn().Str("cell_id", idStr).Msg("Cell ID missing from order list, appending to end")
 			}
 
 			var nullCellName sql.NullString
@@ -289,23 +319,17 @@ func (r *cellRepository) UpdateCells(ctx context.Context, notebookID uuid.UUID, 
                 ON CONFLICT (id) DO UPDATE
                 SET source = $4, cell_name = $5, execution_count = $6, cell_index = $7;
             `
-			r.Logger.Info().
-				Str("cell_id", idStr).
-				Int("cell_index", cellIndex).
-				Msg("Executing upsert for cell")
 			if _, err := tx.Exec(ctx, query, cellUUID, notebookID, cellData.CellType, cellData.Source, nullCellName, cellData.ExecutionCount, cellIndex); err != nil {
 				r.Logger.Error().Err(err).Str("cell_id", idStr).Msg("Failed to upsert cell")
-				return err // Rollback
+				return err
 			}
 		}
 	}
 
-	// 3. Handle reordering for cells that were not upserted
-	r.Logger.Info().Msg("Performing reorder-only updates for remaining cells")
+	// update indices for cells that were only reordered
 	for idStr, index := range orderMap {
 		if !upsertedIDs[idStr] {
-			cellUUID, _ := uuid.Parse(idStr) // Error already handled if it was in orderMap
-			r.Logger.Info().Str("cell_id", idStr).Int("new_index", index).Msg("Updating index for reordered-only cell")
+			cellUUID, _ := uuid.Parse(idStr)
 			if _, err := tx.Exec(ctx, "UPDATE cells SET cell_index = $1 WHERE id = $2", index, cellUUID); err != nil {
 				r.Logger.Error().Err(err).Str("cell_id", idStr).Msg("Failed to reorder cell")
 				return err
@@ -313,7 +337,6 @@ func (r *cellRepository) UpdateCells(ctx context.Context, notebookID uuid.UUID, 
 		}
 	}
 
-	r.Logger.Info().Msg("Committing transaction")
 	return tx.Commit(ctx)
 }
 

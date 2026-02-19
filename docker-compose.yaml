@@ -17,7 +17,8 @@ services:
       CULL_INTERVAL_MINUTES: 10
       IDLE_THRESHOLD_MINUTES: 30
       AUTH_GRPC_ADDRESS: "auth:5001"
-      LLM_MICROSERVICE_URL: "http://host.docker.internal:8000"
+      LLM_MICROSERVICE_URL: "http://host.docker.internal:5004"
+      VOLPE_SERVICE_URL: "http://host.docker.internal:7070"
       USER_DATA_DIR: "/mnt/user_data"
     networks:
       - evoc-net
